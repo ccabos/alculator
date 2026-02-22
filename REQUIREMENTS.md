@@ -1,8 +1,18 @@
 # Alculator — Blood Alcohol Content Tracker
-## Requirements Specification v2.1
-*Date: 2026-02-22 | Supersedes v2.0*
+## Requirements Specification v2.2
+*Date: 2026-02-22 | Supersedes v2.1*
 
 ---
+
+## Changelog (v2.1 → v2.2)
+
+| Change | Reason |
+|--------|--------|
+| Elimination model changed from zero-order to Michaelis-Menten (§4.3.3) | Zero-order elimination prevents BAC from rising when food extends T_absorb beyond the per-minute elimination rate; M-M kinetics correctly slow elimination at low BAC (supported by RESEARCH.md §3.1) |
+| ethanol_factor values reduced to 0.97/0.95/0.92/0.90 (§4.3.2, §4.8.2) | Previous values (0.90–0.50) double-counted the food effect already captured by extended T_absorb; ethanol_factor now represents only incremental first-pass metabolism from food |
+| Food coverage rule changed from fixed pre_window to physics-based Case A/B (§4.8.2) | Fixed pre_window incorrectly covered drinks already fully absorbed before the food was eaten |
+| Unit tests updated for new model (§6.1) | Tests must match the corrected elimination model and coverage rule |
+| ABSORPTION_MODEL.md added as companion document | Detailed explanation of model, rationale, theory cross-references, and worked examples with curve images |
 
 ## Changelog (v2.0 → v2.1)
 
@@ -184,31 +194,53 @@ extension. The resolution order mirrors FR-30:
 |---|---|
 | No food | 1.00 (no reduction) |
 | Per-drink food flag only | 0.85 (15 % reduction) |
-| Food log — Snack | 0.90 (10 % reduction) |
-| Food log — Light meal | 0.80 (20 % reduction) |
-| Food log — Full meal | 0.65 (35 % reduction) |
-| Food log — Heavy meal | 0.50 (50 % reduction) |
+| Food log — Snack | 0.97 (3 % reduction — incremental FPM) |
+| Food log — Light meal | 0.95 (5 % reduction — incremental FPM) |
+| Food log — Full meal | 0.92 (8 % reduction — incremental FPM) |
+| Food log — Heavy meal | 0.90 (10 % reduction — incremental FPM) |
+
+The ethanol_factor represents **only** the incremental gastric first-pass
+metabolism (FPM) from food's extended gastric residence time (Frezza 1990:
+fasted FPM ≈ 5–10 %; food adds ~3–12 % more). The total peak BAC reduction
+(20–50 % per literature) comes primarily from the extended T_absorb allowing
+more concurrent Michaelis-Menten elimination. See ABSORPTION_MODEL.md §3.3.
 
 If multiple food log events cover the same drink, the one with the **lowest**
 `ethanol_factor_i` (most protective) shall apply.
 
-#### 4.3.3 Elimination
+#### 4.3.3 Elimination — Michaelis-Menten Kinetics
 
 | ID | Requirement |
 |----|-------------|
-| FR-34 | Elimination shall follow **zero-order kinetics**: BAC declines at a constant rate while BAC > 0 |
-| FR-35 | Default elimination rate β = **0.015 % per hour** |
-| FR-36 | Elimination shall begin from the time of the **first drink** (absorption and elimination run concurrently) |
-| FR-37 | BAC = max(0, Σ(ethanol_g_i × ethanol_factor_i × f_i(t)) / (weight_kg × 1000 × r) × 100 − β × hours_since_first_drink) |
+| FR-34 | Elimination shall follow **Michaelis-Menten kinetics**: `β_eff = β_max × BAC / (BAC + Km)` |
+| FR-35 | Default maximum elimination rate β_max = **0.015 % per hour**; Michaelis-Menten constant Km = **0.015 %** |
+| FR-36 | Elimination shall run concurrently with absorption from the first minute of the simulation |
+| FR-37 | BAC shall be computed incrementally: `BAC[t] = max(0, BAC[t−1] + ΔBAC_abs − ΔBAC_elim)` where ΔBAC_elim = β_eff(BAC[t−1]) / 60 per minute |
+
+**Why Michaelis-Menten instead of zero-order?**
+Zero-order elimination (constant β) assumes the hepatic enzyme ADH is fully
+saturated at all BAC levels. RESEARCH.md §3.1 states this is only true above
+~0.015–0.020 %. Below that threshold, ADH is unsaturated and elimination slows
+(Km ≈ 2–10 mg/dL). When food extends T_absorb to 90–120 min, per-minute
+absorption can fall below zero-order elimination, making BAC stay at zero — a
+physiologically impossible result. M-M kinetics resolve this by correctly
+slowing elimination at low BAC. At social-drinking levels (> 0.03 %), M-M and
+zero-order produce nearly identical results. See ABSORPTION_MODEL.md §2.4.
 
 **Full formula (informative):**
 
 ```
+Constants:
+  β_max  = 0.015     (%/h — maximum elimination rate at ADH saturation)
+  Km     = 0.015     (% — half-saturation constant)
+
 For each drink i at time t_i with volume V_i (mL) and ABV_i:
   ethanol_g_i       = V_i × ABV_i/100 × 0.789         (ethanol density 0.789 g/mL)
 
   Resolve food modifier (priority: food log event > per-drink flag > none):
-    covering_events   = food_events where (t_j − pre_j) ≤ t_i ≤ (t_j + post_j)
+    Case A: t_food ≤ t_i ≤ t_food + post_window
+    Case B: t_i < t_food  AND  (t_i + T_base) ≥ t_food
+    covering_events   = food_events matching Case A or Case B
     if covering_events:
       best            = event in covering_events with lowest ethanol_factor
       ethanol_factor_i = best.ethanol_factor
@@ -221,17 +253,20 @@ For each drink i at time t_i with volume V_i (mL) and ABV_i:
       T_absorb_i      = 20 min if carbonated else 45 min
 
   f_i(t)            = clamp((t − t_i) / T_absorb_i, 0, 1)
-  absorbed_g_i(t)   = ethanol_g_i × ethanol_factor_i × f_i(t)
 
 r = Seidl r (or Widmark fallback)
 
-BAC(t) = max(0,
-    Σ absorbed_g_i(t) / (weight_kg × 1000 × r) × 100
-    − β × (t − t_first) / 3600
-)
+BAC[0] = 0
+For each minute t:
+  ΔBAC_abs  = Σ (ethanol_g_i × ethanol_factor_i × (f_i(t) − f_i(t−1)))
+              / (weight_kg × 1000 × r) × 100
+  β_eff     = β_max × BAC[t−1] / (BAC[t−1] + Km)
+  ΔBAC_elim = β_eff / 60
+  BAC[t]    = max(0, BAC[t−1] + ΔBAC_abs − ΔBAC_elim)
 ```
 
-*(All times in seconds internally; hours used in the formula above for legibility.)*
+*(Simulation runs at 1-minute resolution. β_eff converges to β_max above
+~0.03 % BAC, matching classical zero-order behaviour.)*
 
 #### 4.3.4 Uncertainty
 
@@ -337,21 +372,34 @@ nearby drinks.
 The parameters below are derived from the pharmacokinetics literature (gastric
 emptying studies, Frezza 1990, research in RESEARCH.md §1.3). T_absorb is the
 absorption window applied to covered drinks. ethanol_factor is the multiplier
-applied to effective ethanol dose. pre_window and post_window define the time
-span around the food event during which drinks are considered "covered".
+applied to effective ethanol dose (representing only incremental gastric
+first-pass metabolism from food). post_window defines how long after eating
+the food event still affects new drinks.
 
-| Meal size | Representative examples | T_absorb | ethanol_factor | pre_window | post_window |
-|-----------|------------------------|----------|----------------|------------|-------------|
-| **Snack** | Bread roll, crisps, nuts, small appetiser | 60 min | 0.90 (−10 %) | 30 min | 60 min |
-| **Light meal** | Salad, soup, small plate, 1–2 appetisers | 75 min | 0.80 (−20 %) | 60 min | 90 min |
-| **Full meal** | Main course with moderate fat and protein | 90 min | 0.65 (−35 %) | 90 min | 150 min |
-| **Heavy meal** | Large high-fat/protein meal (burger, steak, pizza, pasta) | 120 min | 0.50 (−50 %) | 120 min | 180 min |
+| Meal size | Representative examples | T_absorb | ethanol_factor | post_window |
+|-----------|------------------------|----------|----------------|-------------|
+| **Snack** | Bread roll, crisps, nuts, small appetiser | 60 min | 0.97 (−3 %) | 60 min |
+| **Light meal** | Salad, soup, small plate, 1–2 appetisers | 75 min | 0.95 (−5 %) | 90 min |
+| **Full meal** | Main course with moderate fat and protein | 90 min | 0.92 (−8 %) | 150 min |
+| **Heavy meal** | Large high-fat/protein meal (burger, steak, pizza, pasta) | 120 min | 0.90 (−10 %) | 180 min |
 
-**Coverage rule:** A drink at `t_drink` is covered by a food event at `t_food` when:
+**Coverage rule — physics-based (Case A / Case B):**
+
+A drink at `t_drink` is covered by a food event at `t_food` when **either**:
 
 ```
-t_food − pre_window  ≤  t_drink  ≤  t_food + post_window
+Case A (food before drink):
+  t_food  ≤  t_drink  ≤  t_food + post_window
+
+Case B (drink before food, still absorbing when food arrives):
+  t_drink < t_food   AND   (t_drink + T_base) ≥ t_food
 ```
+
+where `T_base` is the drink's unmodified fasted absorption time (45 min for
+non-carbonated, 20 min for carbonated). Case B ensures that only drinks whose
+absorption is still ongoing when food enters the stomach are covered — a
+drink fully absorbed before the food was eaten gets no benefit. See
+ABSORPTION_MODEL.md §3.4 for a detailed explanation with examples.
 
 **Multiple covering events:** If two or more food events cover the same drink,
 the event with the lowest `ethanol_factor` (most protective) is applied for both
@@ -505,25 +553,29 @@ Valid `meal_size` values: `"snack"`, `"light_meal"`, `"full_meal"`, `"heavy_meal
 | Same drink with and without food flag | food flag set, no covering food event | effective ethanol = 85 % of non-food value |
 | Food flag + carbonated | both set, no covering food event | T_absorb = 45 min; ethanol_factor = 0.85 |
 
-#### Food log — coverage window
+#### Food log — coverage window (Case A / Case B)
 
 | Test | Scenario | Expected |
 |------|----------|----------|
-| Full meal at 19:00; drink at 18:30 | drink is 30 min before meal (within 90 min pre_window) | drink is covered |
-| Full meal at 19:00; drink at 17:29 | drink is 91 min before meal (outside 90 min pre_window) | drink is NOT covered |
-| Full meal at 19:00; drink at 21:30 | drink is 150 min after meal (within 150 min post_window) | drink is covered |
-| Full meal at 19:00; drink at 21:31 | drink is 151 min after meal (outside 150 min post_window) | drink is NOT covered |
-| Snack at 20:00; drink at 20:59 | drink is 59 min after snack (within 60 min post_window) | drink is covered |
+| Case A: Full meal at 19:00; drink at 19:00 | drink at food time (boundary) | drink is covered |
+| Case A: Full meal at 19:00; drink at 21:30 | drink is 150 min after meal (at post_window boundary) | drink is covered |
+| Case A: Full meal at 19:00; drink at 21:31 | drink is 151 min after meal (outside post_window) | drink is NOT covered |
+| Case A: Snack at 20:00; drink at 20:59 | drink is 59 min after snack (within 60 min post_window) | drink is covered |
+| Case B: Full meal at 20:00; drink at 19:30 | t_drink + T_base = 19:30 + 45 = 20:15 ≥ 20:00 → still absorbing | drink IS covered (Case B) |
+| Case B: Full meal at 20:00; drink at 19:00 | t_drink + T_base = 19:00 + 45 = 19:45 < 20:00 → already absorbed | drink is NOT covered |
+| Case B: Full meal at 20:00; carbonated drink at 19:50 | t_drink + T_base = 19:50 + 20 = 20:10 ≥ 20:00 → still absorbing | drink IS covered (Case B) |
+| Case B: Full meal at 20:00; carbonated drink at 19:30 | t_drink + T_base = 19:30 + 20 = 19:50 < 20:00 → already absorbed | drink is NOT covered |
+| M-M elimination: heavy meal food-delayed drink | single drink with T_absorb=120 min, factor=0.90 | BAC rises above 0 (M-M elimination is weak at low BAC) |
 
 #### Food log — parameter application
 
 | Test | Scenario | Expected T_absorb | Expected ethanol_factor |
 |------|----------|-------------------|------------------------|
-| Snack covers drink (non-carbonated) | snack event | 60 min | 0.90 |
-| Light meal covers drink (non-carbonated) | light meal event | 75 min | 0.80 |
-| Full meal covers drink (non-carbonated) | full meal event | 90 min | 0.65 |
-| Heavy meal covers drink (non-carbonated) | heavy meal event | 120 min | 0.50 |
-| Full meal covers carbonated drink | full meal + carbonated | 90 min (food dominates) | 0.65 |
+| Snack covers drink (non-carbonated) | snack event | 60 min | 0.97 |
+| Light meal covers drink (non-carbonated) | light meal event | 75 min | 0.95 |
+| Full meal covers drink (non-carbonated) | full meal event | 90 min | 0.92 |
+| Heavy meal covers drink (non-carbonated) | heavy meal event | 120 min | 0.90 |
+| Full meal covers carbonated drink | full meal + carbonated | 90 min (food dominates) | 0.92 |
 
 #### Food log — precedence and multiple events
 
@@ -599,6 +651,6 @@ Valid `meal_size` values: `"snack"`, `"light_meal"`, `"full_meal"`, `"heavy_meal
 | AC-10 | Export produces a valid JSON file; importing that file on a fresh session restores the drink log and food event log exactly |
 | AC-11 | All unit tests pass (`npm test` exits 0) |
 | AC-12 | Deleting a drink or food event immediately updates the BAC curve |
-| AC-13 | A food event logged at T=0 (full meal) reduces the effective ethanol dose of a drink logged at T=0 to 65 % of its fasted value |
+| AC-13 | A food event logged at T=0 (full meal) reduces the effective ethanol dose of a drink logged at T=0 to 92 % of its fasted value |
 | AC-14 | A drink outside all food event windows falls back to per-drink flag or fasted parameters correctly |
 | AC-15 | Food event markers are visible on the BAC curve time axis at their logged timestamps |

@@ -330,7 +330,7 @@ When food is in your stomach — particularly fat and protein — it:
    down a fraction of alcohol before it ever reaches the bloodstream.
 
 The combined effect means that a large, high-fat/protein meal consumed before
-or during drinking can reduce peak BAC by approximately 50 % compared with
+or during drinking can reduce peak BAC by approximately 20–35 % compared with
 drinking fasted.
 
 ### Logging a food event
@@ -338,12 +338,12 @@ drinking fasted.
 1. Tap the **+ Add food** button (or the fork icon on the main screen).
 2. Choose a **meal size**:
 
-   | Meal size | What counts | Peak BAC effect |
-   |-----------|-------------|-----------------|
-   | **Snack** | Bread roll, crisps, nuts, small appetiser | −10 % |
-   | **Light meal** | Salad, soup, 1–2 small plates | −20 % |
-   | **Full meal** | Standard main course (moderate fat/protein) | −35 % |
-   | **Heavy meal** | Large meal, high fat/protein (burger, steak, pizza, pasta) | −50 % |
+   | Meal size | What counts | Typical peak BAC reduction |
+   |-----------|-------------|---------------------------|
+   | **Snack** | Bread roll, crisps, nuts, small appetiser | −1–5 % |
+   | **Light meal** | Salad, soup, 1–2 small plates | −10–15 % |
+   | **Full meal** | Standard main course (moderate fat/protein) | −20–30 % |
+   | **Heavy meal** | Large meal, high fat/protein (burger, steak, pizza, pasta) | −25–35 % |
 
 3. The timestamp defaults to **now**. Tap it to adjust if you ate earlier.
 4. Optionally add a short **note** (e.g. "pizza", "bar snacks") for your own
@@ -355,25 +355,36 @@ event's coverage window and adjusts their absorption parameters.
 
 ### How food events affect nearby drinks
 
-Each meal size defines a **coverage window** — the span of time before and after
-the meal during which drinks are considered "with food":
+Each meal size defines a **coverage window** — the span of time after eating
+during which new drinks are considered "with food":
 
-| Meal size | Covers drinks up to ... before | Covers drinks up to ... after |
-|-----------|-------------------------------|-------------------------------|
-| Snack | 30 min before | 1 h after |
-| Light meal | 1 h before | 1.5 h after |
-| Full meal | 1.5 h before | 2.5 h after |
-| Heavy meal | 2 h before | 3 h after |
+| Meal size | Covers drinks consumed up to ... after eating |
+|-----------|-----------------------------------------------|
+| Snack | 1 h after |
+| Light meal | 1.5 h after |
+| Full meal | 2.5 h after |
+| Heavy meal | 3 h after |
 
-Any drink whose timestamp falls within this window receives:
+**Drinks consumed before food:** If you had a drink *before* eating, Alculator
+checks whether the drink was still being absorbed when the food entered your
+stomach. A non-carbonated drink takes about 45 minutes to absorb; a carbonated
+drink about 20 minutes. If the food arrived while the drink was still being
+absorbed, the remaining absorption is slowed. If the drink was already fully
+absorbed before you ate, the food cannot retroactively affect it.
+
+For example: a wine at 19:30 would normally finish absorbing by 20:15. If you
+eat a full meal at 20:00, the wine is still being absorbed → covered. But a
+wine at 19:00 finishes absorbing by 19:45, so a meal at 20:00 arrives too
+late → not covered.
+
+Any covered drink receives:
 - A longer absorption window (slower rise on the BAC curve)
-- A reduced effective ethanol dose (lower peak BAC contribution)
-
-**Food eaten before drinking** is modelled because alcohol consumed shortly after
-a meal is still affected — the food is still slowing gastric emptying.
+- A slightly reduced effective ethanol dose (lower peak BAC contribution)
 
 If multiple food events overlap on the same drink, the most protective one
-(the highest meal size) is used.
+(the largest meal size) is used.
+
+For detailed worked examples, see [ABSORPTION_MODEL.md](ABSORPTION_MODEL.md).
 
 ### Food markers on the BAC curve
 
@@ -613,12 +624,14 @@ models it with a faster absorption window for carbonated drinks.
 
 **Q: I ate before I started drinking. Does that help and how do I log it?**
 
-Yes, eating before drinking substantially reduces peak BAC. Log a food event
-(§10) with the appropriate meal size and set the timestamp to when you ate.
-Alculator will apply the food effect to drinks logged after the meal — and even
-to drinks logged up to the pre-window of the meal (e.g. a drink 90 minutes before
-a full meal is still affected because the food was in your stomach when your body
-was processing that drink).
+Yes, eating before drinking substantially reduces peak BAC (typically 20–35 %
+for a full or heavy meal). Log a food event (§10) with the appropriate meal
+size and set the timestamp to when you ate. Alculator will apply the food
+effect to all drinks logged after the meal (within the coverage window). If
+you had a drink *before* the meal, it is covered only if you were still
+absorbing that drink when the food arrived (roughly within 45 minutes for
+non-carbonated drinks, 20 minutes for carbonated drinks). A drink fully
+absorbed before you ate gets no benefit from the food.
 
 ---
 
