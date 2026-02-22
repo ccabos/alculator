@@ -1,5 +1,5 @@
 # Alculator — User Manual
-## Version 1.0 | Draft
+## Version 1.1 | Draft
 *Date: 2026-02-22*
 
 ---
@@ -14,8 +14,8 @@
 6. [The BAC Curve](#6-the-bac-curve)
 7. [The Uncertainty Band](#7-the-uncertainty-band)
 8. [The BAC Readout](#8-the-bac-readout)
-9. [The Drink Log](#9-the-drink-log)
-10. [Food and Carbonation Flags](#10-food-and-carbonation-flags)
+9. [The Session Log](#9-the-session-log)
+10. [Logging Food](#10-logging-food)
 11. [Exporting and Importing Data](#11-exporting-and-importing-data)
 12. [Starting a New Session](#12-starting-a-new-session)
 13. [Installing the App on Your Phone](#13-installing-the-app-on-your-phone)
@@ -267,63 +267,140 @@ of when you might be safe to drive.
 
 ---
 
-## 9. The Drink Log
+## 9. The Session Log
 
-Scroll down on the main screen (or tap the "Log" tab) to see every drink you
-have logged this session, in reverse-chronological order.
+Scroll down on the main screen (or tap the **"Log"** tab) to see every drink
+and food event you have logged this session, interleaved in reverse-chronological
+order. This gives you a single complete timeline of the evening at a glance.
 
-### Each entry shows
+### Drink entries show
 
 - **Drink name** and type
 - **Volume** (mL) and **ABV** (%)
 - **Alcohol content** in grams
 - **Time logged**
-- Food and carbonation flags (if set)
+- Carbonation flag (if set)
+- **Active food modifier** — which food event (if any) is affecting this drink's
+  absorption, and the resulting effective ethanol reduction (e.g. "Full meal −35 %")
 
-### Editing a drink
+### Food entries show
 
-Tap any log entry to open it. You can:
-- Change the timestamp (if you logged a drink at the wrong time)
-- Change the volume or ABV (if you guessed and want to correct it)
-- Toggle the food or carbonation flag
+- **Meal size** label (Snack / Light meal / Full meal / Heavy meal)
+- **Time logged**
+- **Coverage window** — the span of time during which this food event affects
+  nearby drinks (e.g. "covers drinks from 17:30 to 21:30")
+- Your optional **note** (e.g. "pizza")
 
-Changes take effect immediately and the BAC curve recalculates.
+### Editing an entry
 
-### Deleting a drink
+Tap any log entry to open it. For a drink you can change the timestamp, volume,
+ABV, or carbonation flag. For a food event you can change the timestamp or meal
+size. Changes take effect immediately and the BAC curve recalculates.
+
+### Deleting an entry
 
 Swipe left on any log entry (or long-press and tap Delete) to remove it.
-The BAC curve updates instantly.
+The BAC curve updates instantly — including any change in food coverage for
+nearby drinks.
 
 ### Clearing the session
 
-Tap the **menu** (top-right) → **Clear session** to remove all drinks and
-start fresh. You will be asked to confirm before anything is deleted.
+Tap the **menu** (top-right) → **Clear session** to remove all drinks and food
+events and start fresh. You will be asked to confirm before anything is deleted.
 
 ---
 
-## 10. Food and Carbonation Flags
+## 10. Logging Food
 
-### Why these matter
+Food has a substantial, well-documented effect on alcohol absorption. Eating
+before or during drinking can reduce your peak BAC by 10–50 % and delay it
+by 30–120 minutes. Alculator lets you log food as a first-class event so the
+BAC curve reflects your actual evening, not just the drinks.
 
-**Food** significantly delays and reduces alcohol absorption. A meal before
-or during drinking can lower your peak BAC by 20–50 % compared to drinking
-on an empty stomach. Alculator models this by:
-- Extending the absorption window to 90 minutes (vs. 45 minutes by default)
-- Applying a 15 % reduction in effective ethanol dose
+### Why food matters (the science in brief)
 
-**Carbonated drinks** (champagne, prosecco, sparkling cocktails) are absorbed
-faster because CO₂ accelerates gastric emptying. Alculator uses a 20-minute
-absorption window for carbonated drinks (vs. 45 minutes by default). This
-produces a steeper early rise on the BAC curve.
+When food is in your stomach — particularly fat and protein — it:
 
-### Setting the flags
+1. **Slows gastric emptying.** Alcohol stays in the stomach longer, where it
+   is absorbed more slowly (~20 % of absorption) rather than passing quickly
+   to the small intestine (where ~80 % of absorption happens).
+2. **Dilutes alcohol concentration** in stomach contents, reducing the
+   absorption gradient.
+3. **Extends contact time with gastric enzymes** (gastric ADH), which break
+   down a fraction of alcohol before it ever reaches the bloodstream.
 
-**Per drink:** When logging a drink, toggle "With food" or "Carbonated" in
-the drink detail view. The champagne preset has "Carbonated" pre-checked.
+The combined effect means that a large, high-fat/protein meal consumed before
+or during drinking can reduce peak BAC by approximately 50 % compared with
+drinking fasted.
 
-**Global food toggle:** Tap the **fork-and-knife icon** on the main screen to
-enable "Eating alongside drinks" mode. All newly logged drinks will be marked
-"with food" automatically until you turn it off.
+### Logging a food event
+
+1. Tap the **+ Add food** button (or the fork icon on the main screen).
+2. Choose a **meal size**:
+
+   | Meal size | What counts | Peak BAC effect |
+   |-----------|-------------|-----------------|
+   | **Snack** | Bread roll, crisps, nuts, small appetiser | −10 % |
+   | **Light meal** | Salad, soup, 1–2 small plates | −20 % |
+   | **Full meal** | Standard main course (moderate fat/protein) | −35 % |
+   | **Heavy meal** | Large meal, high fat/protein (burger, steak, pizza, pasta) | −50 % |
+
+3. The timestamp defaults to **now**. Tap it to adjust if you ate earlier.
+4. Optionally add a short **note** (e.g. "pizza", "bar snacks") for your own
+   reference. Notes do not affect the calculation.
+5. Tap **Log food**.
+
+That's all. Alculator automatically works out which drinks are within the food
+event's coverage window and adjusts their absorption parameters.
+
+### How food events affect nearby drinks
+
+Each meal size defines a **coverage window** — the span of time before and after
+the meal during which drinks are considered "with food":
+
+| Meal size | Covers drinks up to ... before | Covers drinks up to ... after |
+|-----------|-------------------------------|-------------------------------|
+| Snack | 30 min before | 1 h after |
+| Light meal | 1 h before | 1.5 h after |
+| Full meal | 1.5 h before | 2.5 h after |
+| Heavy meal | 2 h before | 3 h after |
+
+Any drink whose timestamp falls within this window receives:
+- A longer absorption window (slower rise on the BAC curve)
+- A reduced effective ethanol dose (lower peak BAC contribution)
+
+**Food eaten before drinking** is modelled because alcohol consumed shortly after
+a meal is still affected — the food is still slowing gastric emptying.
+
+If multiple food events overlap on the same drink, the most protective one
+(the highest meal size) is used.
+
+### Food markers on the BAC curve
+
+Each food event appears as a **fork icon** on the time axis of the BAC curve,
+labelled with the meal size abbreviation (S / L / F / H). Tapping the icon
+shows a tooltip with the meal size, time, and number of drinks affected.
+
+You can see the difference a meal makes by logging a food event and watching
+the BAC curve flatten and shift right in real time.
+
+### The "Eating alongside drinks" quick toggle
+
+For quick logging without creating a food event, you can tap the
+**fork-and-knife icon** on the main screen to enable "Eating alongside drinks"
+mode. While active, any newly logged drink that is not already covered by a food
+log event will receive the basic per-drink food modifier: a 90-minute absorption
+window and 15 % ethanol reduction. This is a rough approximation; for accuracy,
+log a food event instead.
+
+### Carbonation and food together
+
+Carbonated drinks (champagne, prosecco) are absorbed faster because CO₂
+accelerates gastric emptying. However, when food is present, the food-induced
+slowing of gastric emptying dominates. Alculator therefore applies the food
+event's T_absorb to carbonated drinks when a food event covers them, and
+ignores the carbonation modifier. In practice, that flute of champagne at a
+meal will behave like a non-carbonated drink for absorption purposes.
 
 ---
 
@@ -342,8 +419,8 @@ enable "Eating alongside drinks" mode. All newly logged drinks will be marked
 1. Tap the **menu** → **Export session**.
 2. A JSON file named `alculator-session-YYYYMMDD-HHMMSS.json` is downloaded
    to your device.
-3. The file contains: your profile snapshot, and your full drink log for the
-   session.
+3. The file contains: your profile snapshot, your full drink log, and your
+   full food event log for the session.
 
 ### How to import
 
@@ -534,6 +611,45 @@ models it with a faster absorption window for carbonated drinks.
 
 ---
 
+**Q: I ate before I started drinking. Does that help and how do I log it?**
+
+Yes, eating before drinking substantially reduces peak BAC. Log a food event
+(§10) with the appropriate meal size and set the timestamp to when you ate.
+Alculator will apply the food effect to drinks logged after the meal — and even
+to drinks logged up to the pre-window of the meal (e.g. a drink 90 minutes before
+a full meal is still affected because the food was in your stomach when your body
+was processing that drink).
+
+---
+
+**Q: I had a snack earlier but didn't log it. Can I add it retroactively?**
+
+Yes. Tap **+ Add food**, choose Snack, and tap the timestamp to adjust it to
+when you actually ate. Alculator recalculates immediately once you save it.
+
+---
+
+**Q: I chose "Full meal" but I only had a light snack. Will this mess up my numbers?**
+
+Yes — choosing too large a meal size will make the app underestimate your BAC.
+Choose the meal size that best matches what you actually ate. When in doubt,
+choose a smaller meal size; it is safer to err on the side of a higher BAC
+estimate than a lower one.
+
+---
+
+**Q: Does eating during or after drinking help?**
+
+Eating **during** drinking is nearly as effective as eating before — food in
+your stomach slows absorption of alcohol that is already there. Alculator models
+this correctly using the post-window of each food event.
+
+Eating **after** significant drinking has little effect on BAC because most of
+the alcohol has already been absorbed. The app models this by defining a
+post-window that ends well before the estimated sober time.
+
+---
+
 **Q: Does drinking water or coffee help me sober up?**
 
 No. Water and coffee do not speed up alcohol metabolism. Drinking water helps
@@ -571,4 +687,4 @@ reimport it (§11).
 
 ---
 
-*Alculator Manual v1.0 — for feedback or bug reports, see the project repository.*
+*Alculator Manual v1.1 — for feedback or bug reports, see the project repository.*
