@@ -1,6 +1,17 @@
 # Alculator — Blood Alcohol Content Tracker
-## Requirements Specification v2.2
-*Date: 2026-02-22 | Supersedes v2.1*
+## Requirements Specification v2.3
+*Date: 2026-02-23 | Supersedes v2.2*
+
+---
+
+## Changelog (v2.2 → v2.3)
+
+| Change | Reason |
+|--------|--------|
+| New §7 Architecture section added (AR-01 – AR-06, module map, update workflow) | Documents the module structure and separation rules so the model layer can be maintained independently of the UI and persistence layers |
+| All pharmacokinetic constants shall be defined exclusively in `model/constants.js` (AR-01) | Single source of truth prevents parameter values scattering across files; makes updates safe, auditable, and propagated automatically to all consumers |
+| Test suite extended to 57 cases (§6.1 + §7.3 integration tests) | Six integration scenarios validate the JS implementation against the Python reference implementation (`scripts/generate_curves.py`) |
+| `package.json` and `vitest.config.js` added to project | Provides `npm test` and `npm run coverage` commands as required by UT-02 and UT-03 |
 
 ---
 
@@ -601,9 +612,93 @@ Valid `meal_size` values: `"snack"`, `"light_meal"`, `"full_meal"`, `"heavy_meal
 | Invalid JSON | import malformed file | error message, no state change |
 | Wrong schema version | import v0 or v1 file | error message, no state change |
 
+The 51 unit test cases above are complemented by 6 integration scenario tests
+defined in §7.4 (total: 57 test cases).  The integration tests live in
+`tests/integration/scenarios.test.js` and validate the JavaScript BAC engine
+against the Python reference implementation.
+
 ---
 
-## 7. Constraints
+## 7. Architecture
+
+### 7.1 Module Structure
+
+The application is organised into four layers.  Higher layers depend on lower
+ones; lower layers must never import from higher ones.
+
+| Layer | Directory | Purpose |
+|-------|-----------|---------|
+| Model | `model/` | Pure pharmacokinetic functions; no side effects, no browser APIs |
+| Persistence | `store/` | `localStorage` CRUD for profile, drinks, and food events |
+| I/O | `io/` | JSON export, import, and schema validation |
+| UI | `ui/` | Rendering, forms, chart, and event handling |
+
+**Dependency direction** (arrows = "imports from"):
+
+```
+ui/  →  store/  →  model/  →  model/constants.js
+ui/  →  io/     →  model/  →  model/constants.js
+tests/           →  model/
+tests/           →  io/
+```
+
+### 7.2 Architecture Requirements
+
+| ID | Requirement |
+|----|-------------|
+| AR-01 | All pharmacokinetic constants shall be defined exclusively in `model/constants.js`; no other file may define or hardcode pharmacokinetic parameter values (β_max, Km, T_absorb, ethanol_factor, r fallbacks, uncertainty CV, meal-tier parameters, etc.) |
+| AR-02 | All functions in `model/` shall be pure: given the same inputs they produce the same output, they do not read or write DOM, `localStorage`, or any external state, and they do not mutate their arguments |
+| AR-03 | Files in `model/` shall only import from other files within `model/`; they shall not import from `store/`, `io/`, or `ui/` |
+| AR-04 | Test files shall not import from `ui/` or `store/`; they shall not depend on DOM, `localStorage`, or network |
+| AR-05 | When a pharmacokinetic parameter is changed in `model/constants.js`, no other source file (outside `tests/`) shall need editing for the model to produce correct results |
+| AR-06 | Each constant in `model/constants.js` shall have a JSDoc comment that documents: its physical unit, its RESEARCH.md citation, and the conditions under which the value should be updated |
+
+### 7.3 Model Module Exports
+
+| Module | Exported functions |
+|--------|--------------------|
+| `model/profile.js` | `seidlR(profile)`, `watsonTBW(profile)`, `computeR(profile)` |
+| `model/absorption.js` | `ethanolG(volume_ml, abv_pct)`, `tBase(carbonated)`, `absorptionFraction(elapsed_min, T_absorb)`, `resolveModifiers(drink_time_min, carbonated, food_events, with_food_flag)` |
+| `model/elimination.js` | `betaEff(bac_pct)`, `eliminationStep(bac_pct)` |
+| `model/food.js` | `isCoveredCaseA(drink_time_min, food_time_min, post_window_min)`, `isCoveredCaseB(drink_time_min, food_time_min, t_base_min)`, `selectBestCovering(params)` |
+| `model/bac.js` | `bacSeries(drinks, food_events, profile, t_start_min, t_end_min)`, `findSoberTime(series)`, `uncertaintyBounds(bac_pct)` |
+| `io/session_io.js` | `exportJSON(session)`, `importJSON(json)`, `validateSchema(obj)` |
+
+Full function signatures and behaviour descriptions are in ARCHITECTURE.md §3.
+
+### 7.4 Integration Scenario Tests
+
+In addition to the 51 unit test cases in §6.1, six integration tests in
+`tests/integration/scenarios.test.js` validate the JavaScript implementation
+against the Python reference (`scripts/generate_curves.py`).
+
+| Scenario | Expected peak BAC |
+|----------|-------------------|
+| Ex 1: 3 wines, fasted | 0.0524 % |
+| Ex 2: heavy meal 30 min before drinking | 0.0378 % |
+| Ex 3: drink 1 h before meal (not covered) | 0.0387 % |
+| Ex 4: drink 30 min before meal (Case B covered) | 0.0422 % |
+| Ex 5: snack mid-session | 0.0521 % |
+| Ex 6: champagne + dinner | 0.0397 % |
+
+Tolerance: ±0.001 %.  Profile: male, 70 kg, 175 cm, age 30.
+
+### 7.5 Constants Update Workflow
+
+When new research revises a pharmacokinetic parameter:
+
+1. Edit `model/constants.js` — change the value; update `@see` and `@update` JSDoc fields
+2. Run `npm test` — failing tests identify every function and scenario affected
+3. For each failing test, confirm the new behaviour is physiologically correct, then update the expected value
+4. Update the relevant formula or table in REQUIREMENTS.md §4.3 or §4.8.2 and add a changelog entry
+5. Update RESEARCH.md §10 if the citation is new or the parameter range changed
+6. Commit all changed files together with a descriptive message
+
+A complete worked example (updating β_max) is in ARCHITECTURE.md §7.
+
+---
+
+## 8. Constraints
 
 - Hosted on **GitHub Pages** — static files only, no server-side logic
 - All persistence via **localStorage** (cookies explicitly excluded due to 4 KB limit)
@@ -613,7 +708,7 @@ Valid `meal_size` values: `"snack"`, `"light_meal"`, `"full_meal"`, `"heavy_meal
 
 ---
 
-## 8. Out of Scope
+## 9. Out of Scope
 
 - Multi-user support
 - Drink history across multiple sessions beyond the 24 h auto-clear
@@ -625,7 +720,7 @@ Valid `meal_size` values: `"snack"`, `"light_meal"`, `"full_meal"`, `"heavy_meal
 
 ---
 
-## 9. Disclaimer (must appear in-app)
+## 10. Disclaimer (must appear in-app)
 
 > BAC estimates are based on the Seidl/Widmark formula and carry an inherent
 > **±21 % uncertainty** (Gullberg, 2015). Individual metabolism varies significantly
@@ -635,7 +730,7 @@ Valid `meal_size` values: `"snack"`, `"light_meal"`, `"full_meal"`, `"heavy_meal
 
 ---
 
-## 10. Acceptance Criteria
+## 11. Acceptance Criteria
 
 | ID | Criterion |
 |----|-----------|
