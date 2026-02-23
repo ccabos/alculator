@@ -1,6 +1,20 @@
 # Alculator — Blood Alcohol Content Tracker
-## Requirements Specification v2.3
-*Date: 2026-02-23 | Supersedes v2.2*
+## Requirements Specification v2.4
+*Date: 2026-02-23 | Supersedes v2.3*
+
+---
+
+## Changelog (v2.3 → v2.4)
+
+| Change | Reason |
+|--------|--------|
+| Drinking duration added to drink model (§4.3.2 FR-27a, FR-27b) | A drink consumed over 30 min is not instantaneous; the midpoint approximation introduces a D/2 timing error and misses early absorption; the exact closed-form convolution is analytically trivial and eliminates all systematic error |
+| `absorptionFraction(elapsed, T_absorb, duration_min)` replaces the instantaneous ramp (§4.3.2) | New parameter `duration_min` defaults to 0 (backwards-compatible); closed-form uses antiderivative H(x,T) so no numerical integration is needed |
+| `duration_min` field added to drink schema (§4.9) | Persists per-drink drinking duration; default 0 preserves backwards compatibility with imported v2 sessions |
+| New §4.10 Drink Preset Library | User can define, edit, and manage a library of standard drinks each carrying a default drinking duration; duration can be overridden at logging time |
+| `model/food.js`, `model/absorption.js`, `model/presets.js` created | First implemented model-layer JS modules; all pure functions |
+| `store/presets.js` created | localStorage adapter for the preset library |
+| Test suite extended to 76 cases (food: 17, absorption: 36, presets: 23) | All three new modules have full test coverage; 76 tests pass under `npm test` |
 
 ---
 
@@ -187,13 +201,16 @@ absorption ramp for each drink.
 
 | ID | Requirement |
 |----|-------------|
-| FR-27 | Each drink's ethanol contribution shall be modelled as absorbed linearly from `t_drink` to `t_drink + T_absorb` |
-| FR-28 | The default absorption window `T_absorb` shall be **45 minutes** |
-| FR-29 | Carbonated drinks shall use `T_absorb = 20 minutes` as the base (faster gastric emptying; Ridout 2003) |
+| FR-27 | Each drink shall carry a **drinking duration** `duration_min ≥ 0` (integer minutes). The default is 0, meaning instantaneous. The value is set by the drink's preset and may be overridden by the user at logging time. |
+| FR-27a | When `duration_min = 0`, the absorbed fraction shall use the instantaneous linear ramp: `f(t) = clamp((t − t_start) / T_absorb, 0, 1)` |
+| FR-27b | When `duration_min > 0`, the absorbed fraction shall use the **closed-form convolution formula** that models ethanol entering the stomach uniformly while the drink is consumed: `f(t) = [ H(t−t_start, T_absorb) − H(t−t_start−D, T_absorb) ] / D` where `D = duration_min` and `H(x,T) = 0` if `x≤0`, `x²/(2T)` if `0<x≤T`, `x−T/2` if `x>T`. This formula is exact: no numerical integration is required. |
+| FR-27c | The closed-form formula shall reduce continuously to the instantaneous ramp as `duration_min → 0`, and absorption shall complete at `t_start + duration_min + T_absorb`. |
+| FR-28 | The base absorption window `T_absorb` (for fasted, unmodified drinks) shall be **45 minutes** for non-carbonated and **20 minutes** for carbonated drinks. |
+| FR-29 | Carbonated drinks shall use `T_absorb = 20 minutes` as the base (faster gastric emptying; Ridout 2003). When a food log event covers the drink, carbonation is overridden by the food event's T_absorb. |
 | FR-30 | The food modifier applied to a drink shall be resolved in priority order: (1) the most protective food log event whose time window covers the drink (§4.8), (2) the per-drink "with food" flag (FR-18), (3) no food modifier |
 | FR-31 | When a food log event covers a drink, `T_absorb_i = food_event.T_absorb` (food effect dominates; carbonation flag is disregarded because the gastric-slowing effect of food supersedes CO₂ acceleration) |
 | FR-32 | When only the per-drink food flag applies (no covering food log event), `T_absorb_i = 90 min` for non-carbonated drinks and `T_absorb_i = 45 min` for carbonated drinks (opposing effects partially cancel) |
-| FR-33 | The absorbed fraction at time *t* for drink *i* is: `f_i(t) = clamp((t − t_i) / T_absorb_i, 0, 1)` |
+| FR-33 | The absorbed fraction at time *t* for drink *i* is computed by FR-27a or FR-27b, depending on `duration_min`. |
 
 **Food modifier on effective ethanol dose:**
 Food increases first-pass metabolism (more time in contact with gastric ADH) and
@@ -469,6 +486,7 @@ If no food log event covers a drink, the per-drink flag applies (FR-30).
       "volume_ml": 330,
       "abv_pct": 5.0,
       "logged_at": "2026-02-22T19:30:00Z",
+      "duration_min": 20,
       "carbonated": false,
       "with_food": false
     }
@@ -485,6 +503,56 @@ If no food log event covers a drink, the per-drink flag applies (FR-30).
 ```
 
 Valid `meal_size` values: `"snack"`, `"light_meal"`, `"full_meal"`, `"heavy_meal"`.
+Valid `duration_min` range: integer ≥ 0. Sessions exported before v2.4 that lack this field shall be imported with `duration_min = 0`.
+
+---
+
+### 4.10 Drink Preset Library
+
+The preset library is the user's personal collection of standard drink definitions.
+It provides defaults for volume, ABV, carbonation, and drinking duration, all of
+which the user can override at logging time.
+
+#### 4.10.1 Built-in Presets
+
+The following presets are shipped with the application and cannot be permanently
+deleted (only hidden).
+
+| id | Name | Volume | ABV | Carbonated | Default duration |
+|----|------|--------|-----|------------|-----------------|
+| `beer_regular` | Beer (regular) | 330 mL | 5.0 % | No | 20 min |
+| `beer_pint` | Beer (pint) | 568 mL | 5.0 % | No | 30 min |
+| `wine_glass` | Wine (glass) | 150 mL | 12.0 % | No | 15 min |
+| `wine_large` | Wine (large) | 250 mL | 12.0 % | No | 20 min |
+| `champagne` | Champagne | 150 mL | 12.0 % | Yes | 10 min |
+| `spirit_shot` | Shot | 40 mL | 40.0 % | No | 2 min |
+| `spirit_double` | Double shot | 70 mL | 40.0 % | No | 2 min |
+| `cocktail` | Cocktail | 200 mL | 12.0 % | No | 20 min |
+| `cider_can` | Cider (can) | 440 mL | 4.5 % | No | 25 min |
+
+#### 4.10.2 Preset Management Requirements
+
+| ID | Requirement |
+|----|-------------|
+| FR-120 | The app shall maintain a **drink preset library** containing standard drink definitions |
+| FR-121 | Each preset shall define: `id` (stable string), `name`, `volume_ml`, `abv_pct`, `carbonated` (boolean), `duration_min` (default drinking duration, ≥ 0) |
+| FR-122 | The built-in presets listed in §4.10.1 shall be present in every new installation |
+| FR-123 | The user shall be able to **add a custom preset** by specifying name, volume, ABV, carbonated flag, and default drinking duration |
+| FR-124 | The user shall be able to **edit** any preset (built-in or custom) — name, volume, ABV, carbonated flag, and default drinking duration |
+| FR-125 | The user shall be able to **hide** a built-in preset so it no longer appears in the logging list; hidden built-ins are not permanently deleted and can be restored |
+| FR-126 | The user shall be able to **delete** a custom preset permanently |
+| FR-127 | All preset customisations (edits, additions, hidden status) shall be persisted in `localStorage` under the key `alculator_preset_overrides` |
+| FR-128 | Preset customisations shall survive a browser refresh |
+| FR-129 | The user shall be able to **reset the preset library** to factory defaults (clears `alculator_preset_overrides`) |
+
+#### 4.10.3 Drink Logging from Preset
+
+| ID | Requirement |
+|----|-------------|
+| FR-130 | When logging a drink from a preset, the user shall be able to **override** volume, ABV, and `duration_min` before confirming |
+| FR-131 | The override applies only to the logged drink instance; the preset definition is not modified |
+| FR-132 | The UI shall provide a quick-select control for `duration_min` with options: 0, 5, 10, 15, 20, 30, 45, 60 minutes, and a free-text field for any other value |
+| FR-133 | `duration_min = 0` shall be labelled "Instant" in the UI; all other values shall be labelled in minutes (e.g. "20 min") |
 
 ---
 
@@ -596,6 +664,37 @@ Valid `meal_size` values: `"snack"`, `"light_meal"`, `"full_meal"`, `"heavy_meal
 | Two food events cover same drink (full + heavy meal) | overlapping coverage | heavy meal parameters apply (most protective) |
 | No food log covers drink; no food flag | fasted drinking | ethanol_factor = 1.00; T_absorb = 45 min (or 20 if carbonated) |
 
+#### Absorption model — drinking duration (closed-form convolution)
+
+All tests use D = 30 min, T_absorb = 45 min.  Let H(x,T) = 0 if x≤0; x²/(2T) if 0<x≤T; x−T/2 if x>T.
+
+| Test | Elapsed | duration_min | Expected absorbed fraction |
+|------|---------|-------------|---------------------------|
+| No absorption before drinking starts | 0 min | 30 | 0 |
+| Quadratic rise phase | 15 min | 30 | 15²/(2×30×45) ≈ 0.0833 |
+| End of drinking (transition to linear) | 30 min | 30 | 30/(2×45) ≈ 0.3333 |
+| Linear middle phase (identical to midpoint approx) | 45 min | 30 | (45−15)/45 ≈ 0.6667 |
+| Fully absorbed at D+T | 75 min | 30 | 1.000 |
+| Clamped after D+T | 85 min | 30 | 1.000 |
+| duration_min=0 matches instantaneous formula | 22.5 min | 0 | 0.5 (same as clamp(22.5/45)) |
+| Monotonically non-decreasing over full time range | 0→90 min | 30 | each value ≥ previous |
+
+#### Drink preset library
+
+| Test | Scenario | Expected |
+|------|----------|----------|
+| Default preset list | no overrides | all 9 built-in presets present |
+| All built-in presets are valid | validatePreset() each | no errors |
+| All built-in presets have duration_min ≥ 0 | — | — |
+| Custom preset override | save preset with same id as built-in | built-in replaced in merged list |
+| Custom preset addition | save preset with new id | appended after built-ins |
+| Hidden built-in | override with hidden:true | excluded from merged list; count − 1 |
+| Restore hidden built-in | remove hidden override | built-in reappears |
+| Validate: invalid volume_ml | volume_ml = 0 | error returned |
+| Validate: invalid abv_pct | abv_pct = 110 | error returned |
+| Validate: negative duration_min | duration_min = −5 | error returned |
+| Round-trip: custom preset sort | buildPresetList + sortPresets | sorted copy; original unchanged |
+
 #### Uncertainty bounds
 
 | Test | Input BAC | Expected lower | Expected upper |
@@ -612,8 +711,8 @@ Valid `meal_size` values: `"snack"`, `"light_meal"`, `"full_meal"`, `"heavy_meal
 | Invalid JSON | import malformed file | error message, no state change |
 | Wrong schema version | import v0 or v1 file | error message, no state change |
 
-The 51 unit test cases above are complemented by 6 integration scenario tests
-defined in §7.4 (total: 57 test cases).  The integration tests live in
+The unit test cases above (76 as of v2.4) are complemented by 6 integration scenario tests
+defined in §7.4 (total: 82 test cases).  The integration tests live in
 `tests/integration/scenarios.test.js` and validate the JavaScript BAC engine
 against the Python reference implementation.
 

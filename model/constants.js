@@ -211,3 +211,43 @@ export const BAC_THRESHOLDS = Object.freeze({
  * @unit % BAC
  */
 export const SOBER_THRESHOLD = 0.001;
+
+// ─── Drink preset library ──────────────────────────────────────────────────────
+
+/**
+ * Built-in drink presets — the factory default preset library.
+ *
+ * Each preset has a stable `id` that must not be changed once shipped (renaming
+ * an id would orphan user customisations stored in localStorage that reference it).
+ *
+ * duration_min: the typical time a person takes to finish this drink, used by the
+ *   closed-form convolution model (model/absorption.js absorptionFraction).
+ *   The user can override this at logging time.  0 means "instantaneous" (legacy
+ *   behaviour, but no drink is really instantaneous — 0 is reserved for shots).
+ *
+ * @type {ReadonlyArray<{id:string, name:string, volume_ml:number, abv_pct:number,
+ *                       carbonated:boolean, duration_min:number}>}
+ * @see REQUIREMENTS.md §4.10
+ * @update To add a new built-in preset, append a new object with a unique id.
+ *         Do NOT change existing ids.  Volume/ABV/duration values may be revised
+ *         without stability concerns (they are user-overridable defaults only).
+ */
+export const DEFAULT_DRINK_PRESETS = Object.freeze([
+  { id: 'beer_regular',  name: 'Beer (regular)',  volume_ml: 330, abv_pct:  5.0, carbonated: false, duration_min: 20 },
+  { id: 'beer_pint',     name: 'Beer (pint)',      volume_ml: 568, abv_pct:  5.0, carbonated: false, duration_min: 30 },
+  { id: 'wine_glass',    name: 'Wine (glass)',     volume_ml: 150, abv_pct: 12.0, carbonated: false, duration_min: 15 },
+  { id: 'wine_large',    name: 'Wine (large)',     volume_ml: 250, abv_pct: 12.0, carbonated: false, duration_min: 20 },
+  { id: 'champagne',     name: 'Champagne',        volume_ml: 150, abv_pct: 12.0, carbonated: true,  duration_min: 10 },
+  { id: 'spirit_shot',   name: 'Shot',             volume_ml:  40, abv_pct: 40.0, carbonated: false, duration_min:  2 },
+  { id: 'spirit_double', name: 'Double shot',      volume_ml:  70, abv_pct: 40.0, carbonated: false, duration_min:  2 },
+  { id: 'cocktail',      name: 'Cocktail',         volume_ml: 200, abv_pct: 12.0, carbonated: false, duration_min: 20 },
+  { id: 'cider_can',     name: 'Cider (can)',      volume_ml: 440, abv_pct:  4.5, carbonated: false, duration_min: 25 },
+]);
+
+/**
+ * Suggested values for the drinking-duration quick-select control in the UI.
+ * The user can also type any non-negative integer.
+ * @type {ReadonlyArray<number>}
+ * @unit minutes
+ */
+export const DURATION_QUICK_SELECT_MIN = Object.freeze([0, 5, 10, 15, 20, 30, 45, 60]);

@@ -4,12 +4,12 @@
   "description": "Blood Alcohol Content tracker — browser-based, client-side only",
   "type": "module",
   "scripts": {
-    "test":     "vitest run",
+    "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^2.0.0",
-    "vitest": "^2.0.0"
+    "@vitest/coverage-v8": "^2.1.9",
+    "vitest": "^2.1.9"
   }
 }

@@ -81,11 +81,15 @@ r = 0.32 − 0.0048 × 70 + 0.0046 × 175 = 0.789
 
 ### 2.3 Absorption Function
 
+#### 2.3.1 Instantaneous Model (duration = 0)
+
 Alcohol is not absorbed instantly. Alculator models absorption as a **linear
-ramp** from 0 to 100 % over a drink-specific absorption time T_absorb:
+ramp** from 0 to 100 % over a drink-specific absorption time T_absorb.  When
+the drink is assumed to be consumed instantaneously (the default for legacy
+data and for shots), the absorbed fraction at time *t* is:
 
 ```
-f(t) = clamp( (t − t_drink) / T_absorb,  0,  1 )
+f(t) = clamp( (t − t_start) / T_absorb,  0,  1 )
 ```
 
 | Condition | T_absorb | Rationale |
@@ -97,9 +101,75 @@ f(t) = clamp( (t − t_drink) / T_absorb,  0,  1 )
 | With full meal | 90 min | Within the 60–360 min fed range |
 | With heavy meal | 120 min | Extended gastric retention |
 
-The linear ramp is a simplification — real absorption follows a first-order
-exponential curve — but it matches the time-to-peak and total dose
-constraints adequately for an estimation tool (see §4.1).
+#### 2.3.2 Extended-Duration Model (duration > 0)
+
+In reality, most drinks are consumed over several minutes to half an hour.
+Treating the dose as instantaneous introduces two systematic errors:
+
+1. **Early absorption is missed**: the first sip starts being absorbed
+   immediately, not at the midpoint of the drinking window.
+2. **Late completion is too early**: the last sip finishes absorbing
+   `duration/2` minutes earlier than the instantaneous model predicts,
+   causing the BAC to peak sooner and fall off sooner than it really does.
+
+The error in peak BAC magnitude is typically small (≤ 5 % of peak for
+`duration ≤ T_absorb / 2`), but the timing error is `duration / 2` minutes,
+which is significant when comparing curves across scenarios.
+
+**The exact solution** treats ethanol as entering the stomach at a **constant
+rate** while the drink is being consumed (from `t_start` to `t_start + D`
+where D = `duration_min`).  Each "sip" at time `s` starts its own T_absorb
+ramp.  The resulting absorbed fraction is the convolution of the uniform
+intake rate with the linear absorption ramp, which has an **exact closed-form**
+via the antiderivative:
+
+```
+H(x, T) = ∫₀ˣ max(0, min(1, u/T)) du
+
+         = 0              if x ≤ 0
+         = x² / (2T)     if 0 < x ≤ T
+         = x − T/2       if x > T
+```
+
+The absorbed fraction at elapsed time `t` (measured from the start of drinking):
+
+```
+f(t) = [ H(t, T_absorb) − H(t − D, T_absorb) ] / D
+```
+
+**Phase structure** (for the typical case D < T_absorb):
+
+| Phase | Elapsed range | Absorbed fraction | Notes |
+|-------|---------------|-------------------|-------|
+| Quadratic rise | 0 to D | t² / (2DT) | First sips absorbing; last sips still being drunk |
+| Linear middle | D to T | (t − D/2) / T | Identical to midpoint approximation — the two models agree exactly here |
+| Quadratic fall | T to D+T | Decreasing curve approaching 1 | Last sips completing their absorption window |
+| Fully absorbed | > D+T | 1.0 | Complete |
+
+**Key properties:**
+- Absorption begins at t = 0 (first sip), not at t = D/2.
+- Absorption completes at t = D + T_absorb (last sip fully absorbed),
+  D/2 minutes later than the midpoint approximation predicts.
+- The formula reduces continuously to the instantaneous ramp as D → 0.
+- No numerical integration: the formula is computed in O(1).
+
+**Worked example** (D = 30 min, T_absorb = 45 min):
+
+| Elapsed | Absorbed fraction | Via |
+|---------|-------------------|-----|
+| 0 min | 0 % | Before drinking starts |
+| 15 min | 15² / (2×30×45) = 8.3 % | Quadratic phase |
+| 30 min | 30 / (2×45) = 33.3 % | Transition; equals (t−D/2)/T = 15/45 |
+| 45 min | (45−15) / 45 = 66.7 % | Linear phase (midpoint agrees) |
+| 60 min | 91.7 % | Quadratic fall; midpoint says 100 % |
+| 75 min | 100 % | D + T = 75 min — complete |
+
+Midpoint model (dose at t = 15 min) says "done" at t = 15 + 45 = 60 min, but
+8.3 % of the dose is still absorbing at that point in the exact model.
+
+The linear ramp is still a simplification of the underlying first-order
+exponential kinetics — but it matches time-to-peak and total dose constraints
+adequately for an estimation tool (see §4.1).
 
 ### 2.4 Elimination: Michaelis-Menten Kinetics
 

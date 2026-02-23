@@ -177,6 +177,8 @@ Constants defined in `model/constants.js`:
 | `UNCERTAINTY_CV` | 0.21 | — | Gullberg 2015; REQUIREMENTS.md §4.3.4 |
 | `BAC_THRESHOLDS` | {sober/buzz/tipsy/drunk/heavy} | % BAC | REQUIREMENTS.md §4.4 |
 | `SOBER_THRESHOLD` | 0.001 | % BAC | Used by findSoberTime() |
+| `DEFAULT_DRINK_PRESETS` | 9-entry frozen array | — | REQUIREMENTS.md §4.10.1 |
+| `DURATION_QUICK_SELECT_MIN` | [0,5,10,15,20,30,45,60] | min | UI quick-select options |
 
 ### 3.2 `model/profile.js` — Distribution Factor
 
@@ -232,13 +234,17 @@ export function ethanolG(volume_ml, abv_pct)
 export function tBase(carbonated)
 
 /**
- * Fraction of a drink's ethanol absorbed at a given elapsed time.
- * Linear ramp: f = clamp(elapsed / T_absorb, 0, 1).
- * @param {number} elapsed_min — minutes since the drink was consumed
- * @param {number} T_absorb   — total absorption window in minutes
+ * Absorbed fraction at elapsed time, with optional drinking duration.
+ * When duration_min = 0 (default): linear ramp f = clamp(elapsed/T_absorb, 0, 1).
+ * When duration_min > 0: exact closed-form convolution for a drink consumed
+ * uniformly over duration_min minutes — see REQUIREMENTS.md §4.3.2 FR-27b.
+ * Absorption completes at elapsed = duration_min + T_absorb.
+ * @param {number} elapsed_min   — minutes since drink was *started*
+ * @param {number} T_absorb     — absorption window in minutes
+ * @param {number} [duration_min=0] — drinking duration in minutes
  * @returns {number} fraction in [0, 1]
  */
-export function absorptionFraction(elapsed_min, T_absorb)
+export function absorptionFraction(elapsed_min, T_absorb, duration_min = 0)
 
 /**
  * Resolve effective {T_absorb, ethanol_factor} for a drink, applying food
@@ -329,7 +335,35 @@ export function isCoveredCaseB(drink_time_min, food_time_min, t_base_min)
 export function selectBestCovering(params)
 ```
 
-### 3.6 `model/bac.js` — Simulation Engine
+### 3.6 `model/presets.js` — Preset Library (Pure Layer)
+
+Pure functions for managing the drink preset library.  No `localStorage` access.
+
+```js
+/** Validate a preset object; returns [] on success or error strings on failure. */
+export function validatePreset(obj)
+
+/**
+ * Merge built-in presets with user overrides from localStorage.
+ * Override with same id replaces built-in; { id, hidden:true } hides a built-in.
+ * Custom-only overrides (new ids) are appended after built-ins.
+ */
+export function mergePresets(builtins, overrides)
+
+/** Find a preset by id in a merged list.  Returns undefined if not found. */
+export function findPresetById(presets, id)
+
+/** Return a sorted copy (alphabetical by name) without mutating the original. */
+export function sortPresets(presets)
+
+/** Apply a single override to a merged list; appends if id is new. */
+export function applyOverride(presets, override)
+
+/** Convenience: build the visible list from DEFAULT_DRINK_PRESETS + overrides array. */
+export function buildPresetList(overrides = [])
+```
+
+### 3.7 `model/bac.js` — Simulation Engine
 
 The top-level orchestrator.  Calls `resolveModifiers()` for each drink,
 then runs the 1-minute loop integrating absorption and M-M elimination.
@@ -377,7 +411,23 @@ export function uncertaintyBounds(bac_pct)
 
 ## 4. Persistence Layer (`store/`)
 
-### 4.1 `store/session.js`
+### 4.1 `store/presets.js`
+
+localStorage adapter for the drink preset library.  Key: `alculator_preset_overrides`.
+Delegates all pure logic (merging, validation) to `model/presets.js`.
+
+```js
+export function loadPresets()         // merge DEFAULT_DRINK_PRESETS with overrides
+export function savePreset(preset)    // validate then upsert override; throws on error
+export function deletePreset(id)      // hide built-in or remove custom
+export function resetPresets()        // clear all overrides → factory defaults
+```
+
+Override format stored in localStorage:
+- Full or partial preset: `{ id, name?, volume_ml?, abv_pct?, carbonated?, duration_min? }`
+- Hidden built-in:        `{ id, hidden: true }`
+
+### 4.2 `store/session.js`
 
 Manages the current session in `localStorage` under the key `alculator_session`.
 
@@ -404,7 +454,7 @@ The model layer is never called from `session.js` — session.js only stores
 and retrieves raw data objects.  The UI layer is responsible for calling
 `bacSeries()` with the current session state.
 
-### 4.2 Session vs. Profile Persistence
+### 4.3 Session vs. Profile Persistence
 
 The user profile is stored as part of the session object but is preserved
 separately: a "Clear session" action clears drinks and food events but keeps
@@ -462,16 +512,17 @@ Each unit test file is a 1-to-1 map to one model module.  Tests import only
 from the module under test and from `model/constants.js` (for computing expected
 values).  They do not import from `ui/`, `store/`, or each other.
 
-| Test file | Module(s) under test | §6.1 group | # cases |
-|-----------|----------------------|------------|---------|
-| `tests/unit/profile.test.js` | `model/profile.js` | Seidl r (6), Watson TBW (2) | 8 |
-| `tests/unit/ethanol.test.js` | `model/absorption.js` | Ethanol dose (3) | 3 |
-| `tests/unit/absorption.test.js` | `model/absorption.js` | Absorption model (6), food flag (2) | 8 |
-| `tests/unit/elimination.test.js` | `model/elimination.js` | M-M kinetics (4) | 4 |
-| `tests/unit/food.test.js` | `model/food.js`, `absorption.js` | Case A/B (9), params (5), precedence (3) | 17 |
-| `tests/unit/bac.test.js` | `model/bac.js` | BAC curve (5), uncertainty (2) | 7 |
-| `tests/unit/io.test.js` | `io/session_io.js` | Export/Import (4) | 4 |
-| **Unit subtotal** | | | **51** |
+| Test file | Module(s) under test | §6.1 group | # cases | Status |
+|-----------|----------------------|------------|---------|--------|
+| `tests/unit/profile.test.js` | `model/profile.js` | Seidl r (6), Watson TBW (2) | 8 | pending |
+| `tests/unit/ethanol.test.js` | `model/absorption.js` | Ethanol dose (3) | 3 | ✓ in absorption.test.js |
+| `tests/unit/absorption.test.js` | `model/absorption.js` | Absorption model (8), food flag (2), duration (8), resolveModifiers (14) | 36 | ✓ passing |
+| `tests/unit/elimination.test.js` | `model/elimination.js` | M-M kinetics (4) | 4 | pending |
+| `tests/unit/food.test.js` | `model/food.js` | Case A/B (11), selectBestCovering (5) | 17 | ✓ passing |
+| `tests/unit/presets.test.js` | `model/presets.js` | Preset library (23) | 23 | ✓ passing |
+| `tests/unit/bac.test.js` | `model/bac.js` | BAC curve (5), uncertainty (2) | 7 | pending |
+| `tests/unit/io.test.js` | `io/session_io.js` | Export/Import (4) | 4 | pending |
+| **Unit subtotal** | | | **99** | 76 passing |
 
 ### 6.2 Integration / Scenario Tests
 
