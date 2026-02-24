@@ -11,9 +11,10 @@ import { DURATION_QUICK_SELECT_MIN } from '../model/constants.js';
 import { saveSession }               from '../store/session.js';
 
 // ─── Edit state ────────────────────────────────────────────────────────────────
-let _editingDrinkIndex = null;
-let _editingFoodIndex  = null;
-let _selectedMeal      = null;
+let _editingDrinkIndex    = null;
+let _editingDrinkPresetId = null;
+let _editingFoodIndex     = null;
+let _selectedMeal         = null;
 
 // ─── Panel helpers ─────────────────────────────────────────────────────────────
 
@@ -139,7 +140,8 @@ export function initDrinkPanel(presets, getSession, setSession) {
     _setDefaultTime('drink-time');
   });
   cancelBtn.addEventListener('click', () => {
-    _editingDrinkIndex = null;
+    _editingDrinkIndex    = null;
+    _editingDrinkPresetId = null;
     customForm.hidden = true;
     presetGrid.hidden = false;
     customBtn.hidden  = false;
@@ -161,12 +163,15 @@ export function initDrinkPanel(presets, getSession, setSession) {
       return;
     }
 
-    const editIdx = _editingDrinkIndex;
-    _editingDrinkIndex = null;
+    const editIdx    = _editingDrinkIndex;
+    const presetId   = _editingDrinkPresetId;
+    _editingDrinkIndex    = null;
+    _editingDrinkPresetId = null;
     document.querySelector('#drink-panel .panel-header h2').textContent = 'Add Drink';
     document.getElementById('drink-custom-save').textContent = 'Log Drink';
 
     _saveDrink({
+      ...(presetId ? { preset_id: presetId } : {}),
       volume_ml:    volume,
       abv_pct:      abv,
       carbonated,
@@ -273,7 +278,8 @@ export function populateProfilePanel(profile) {
  * @param {number} index   — its index in session.drinks
  */
 export function openDrinkPanelForEdit(drink, index) {
-  _editingDrinkIndex = index;
+  _editingDrinkIndex    = index;
+  _editingDrinkPresetId = drink.preset_id ?? null;
 
   // Show custom form, hide preset grid
   document.getElementById('drink-custom-form').hidden = false;
@@ -329,7 +335,8 @@ export function openFoodPanelForEdit(food, index) {
  * Reset the drink panel to "Add" mode (call before opening it normally).
  */
 export function resetDrinkPanel() {
-  _editingDrinkIndex = null;
+  _editingDrinkIndex    = null;
+  _editingDrinkPresetId = null;
   document.getElementById('drink-custom-form').hidden = true;
   document.getElementById('preset-grid').hidden        = false;
   document.getElementById('drink-custom-btn').hidden   = false;
