@@ -17,8 +17,7 @@ import { BAC_THRESHOLDS } from '../model/constants.js';
  * @returns {{ cls: string, label: string }}
  */
 function bacCategory(bac_pct) {
-  if (bac_pct <= 0)                          return { cls: 'badge-sober', label: 'Sober' };
-  if (bac_pct < BAC_THRESHOLDS.tipsy)        return { cls: 'badge-buzz',  label: 'Buzz' };
+  if (bac_pct < BAC_THRESHOLDS.tipsy)        return { cls: 'badge-sober', label: 'Sober' };
   if (bac_pct < BAC_THRESHOLDS.drunk)        return { cls: 'badge-tipsy', label: 'Tipsy' };
   if (bac_pct < BAC_THRESHOLDS.heavy)        return { cls: 'badge-drunk', label: 'Drunk' };
   return                                            { cls: 'badge-heavy', label: 'Heavy' };
@@ -44,9 +43,9 @@ export function renderBACDisplay(bac_pct, bounds) {
   badgeEl.className  = `badge ${cls}`;
   badgeEl.textContent = label;
 
-  // Range string
+  // Range string (compact, inline with the value)
   if (bounds) {
-    rangeEl.textContent = `Range: ${(bounds.lower * 10).toFixed(2)} – ${(bounds.upper * 10).toFixed(2)} ‰`;
+    rangeEl.textContent = `(${(bounds.lower * 10).toFixed(2)}–${(bounds.upper * 10).toFixed(2)})`;
     rangeEl.hidden = false;
   } else {
     rangeEl.hidden = true;

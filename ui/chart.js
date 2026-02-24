@@ -112,7 +112,7 @@ export function renderChart(series, drinks, food_events, now_min) {
   }
 
   // X-axis time labels
-  const xTicks = _timeTicksEvery30(t_min_x, t_max_x);
+  const xTicks = _timeTicks(t_min_x, t_max_x);
   for (const t of xTicks) {
     const x = tx(t);
     parts.push(`<line x1="${x}" y1="${MT + PH}" x2="${x}" y2="${MT + PH + 4}"
@@ -259,11 +259,13 @@ function _niceNum(range, round) {
   return nice * Math.pow(10, exp);
 }
 
-/** Generate X-axis ticks every 30 minutes. */
-function _timeTicksEvery30(t_start, t_end) {
-  const ticks = [];
-  const first = Math.ceil(t_start / 30) * 30;
-  for (let t = first; t <= t_end; t += 30) ticks.push(t);
+/** Generate X-axis ticks, adapting the interval to avoid label overlap. */
+function _timeTicks(t_start, t_end) {
+  const span     = t_end - t_start;
+  const interval = span <= 180 ? 30 : span <= 480 ? 60 : 120;
+  const ticks    = [];
+  const first    = Math.ceil(t_start / interval) * interval;
+  for (let t = first; t <= t_end; t += interval) ticks.push(t);
   return ticks;
 }
 
