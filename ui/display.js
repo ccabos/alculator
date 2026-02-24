@@ -17,7 +17,8 @@ import { BAC_THRESHOLDS } from '../model/constants.js';
  * @returns {{ cls: string, label: string }}
  */
 function bacCategory(bac_pct) {
-  if (bac_pct < BAC_THRESHOLDS.tipsy)        return { cls: 'badge-sober', label: 'Sober' };
+  if (bac_pct <= 0)                          return { cls: 'badge-sober', label: 'Sober' };
+  if (bac_pct < BAC_THRESHOLDS.tipsy)        return { cls: 'badge-buzz',  label: 'Buzz' };
   if (bac_pct < BAC_THRESHOLDS.drunk)        return { cls: 'badge-tipsy', label: 'Tipsy' };
   if (bac_pct < BAC_THRESHOLDS.heavy)        return { cls: 'badge-drunk', label: 'Drunk' };
   return                                            { cls: 'badge-heavy', label: 'Heavy' };

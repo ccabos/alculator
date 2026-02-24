@@ -456,6 +456,7 @@ label.toggle-label { flex-direction: row; align-items: center; }
 
 /* ── Utility ─────────────────────────────────────────────────────────────────── */
 [hidden] { display: none !important; }
-.custom-form { display: flex; flex-direction: column; gap: 0.6rem; }
+.custom-form { display: flex; flex-direction: column; gap: 0.5rem; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
 .food-time-label { flex-direction: row; align-items: center; gap: 0.5rem; }
 .food-time-label input { flex: 0 0 auto; }
