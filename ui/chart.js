@@ -11,7 +11,7 @@
  *   • Vertical current-time marker
  *   • Drink tick marks on the time axis
  *   • Food icons on the time axis with meal-size abbreviation
- *   • Toggleable uncertainty band
+ *   • Uncertainty band (always shown)
  *   • Tap/click tooltip with BAC and clock time
  *   • Readable at 375 px width without horizontal scroll
  */
@@ -36,6 +36,7 @@ const BEER_PRESET_IDS = new Set(['beer_regular', 'beer_pint']);
 function _drinkIcon(preset_id) {
   if (BEER_PRESET_IDS.has(preset_id)) return '🍺';
   if (preset_id === 'champagne')       return '🥂';
+  if (preset_id === 'cocktail')        return '🍹';
   return '🍷';
 }
 
@@ -55,9 +56,8 @@ const MEAL_ABBR = {
  * @param {object[]} drinks
  * @param {object[]} food_events
  * @param {number}   now_min       — current time in minutes from midnight
- * @param {boolean}  showUncertainty
  */
-export function renderChart(series, drinks, food_events, now_min, showUncertainty) {
+export function renderChart(series, drinks, food_events, now_min) {
   const svgEl = document.getElementById('bac-chart');
   if (!svgEl || !series || series.length === 0) return;
 
@@ -122,7 +122,7 @@ export function renderChart(series, drinks, food_events, now_min, showUncertaint
   }
 
   // Uncertainty band (behind the curve)
-  if (showUncertainty) {
+  {
     const upperPts = series.map(p => `${tx(p.t_min)},${by(Math.min(bac_max, uncertaintyBounds(p.bac_pct).upper))}`).join(' ');
     const lowerPts = [...series].reverse().map(p => `${tx(p.t_min)},${by(uncertaintyBounds(p.bac_pct).lower)}`).join(' ');
     parts.push(`<polygon points="${upperPts} ${lowerPts}"

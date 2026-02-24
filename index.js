@@ -30,8 +30,6 @@ let session = {
   drinks:      [],
   food_events: [],
 };
-let showUncertainty = false;
-
 function getSession()       { return session; }
 function setSession(s)      { session = s; }
 
@@ -81,12 +79,6 @@ async function boot() {
   });
   document.getElementById('panel-backdrop').addEventListener('click', () => {
     document.querySelectorAll('.panel:not([hidden])').forEach(p => closePanel(p.id));
-  });
-
-  // Uncertainty toggle
-  document.getElementById('uncertainty-toggle').addEventListener('change', e => {
-    showUncertainty = e.target.checked;
-    redraw();
   });
 
   // Manual refresh
@@ -189,9 +181,9 @@ function redraw() {
     : series;
 
   // Render
-  renderBACDisplay(bac_now, bounds, showUncertainty);
+  renderBACDisplay(bac_now, bounds);
   renderSoberTime(sober_t);
-  renderChart(extended, drinks, food_events, now_min, showUncertainty);
+  renderChart(extended, drinks, food_events, now_min);
   renderSessionLog(drinks, food_events, presets, _deleteDrink, _deleteFood, _editDrink, _editFood);
 }
 

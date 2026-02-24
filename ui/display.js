@@ -29,9 +29,8 @@ function bacCategory(bac_pct) {
  *
  * @param {number} bac_pct        — central estimate
  * @param {{ lower: number, upper: number }|null} bounds — uncertainty bounds, or null to hide
- * @param {boolean} showRange     — whether to display the ±21 % range string
  */
-export function renderBACDisplay(bac_pct, bounds, showRange) {
+export function renderBACDisplay(bac_pct, bounds) {
   const valueEl   = document.getElementById('bac-value');
   const badgeEl   = document.getElementById('bac-badge');
   const rangeEl   = document.getElementById('bac-range');
@@ -46,7 +45,7 @@ export function renderBACDisplay(bac_pct, bounds, showRange) {
   badgeEl.textContent = label;
 
   // Range string
-  if (showRange && bounds) {
+  if (bounds) {
     rangeEl.textContent = `Range: ${(bounds.lower * 10).toFixed(2)} – ${(bounds.upper * 10).toFixed(2)} ‰`;
     rangeEl.hidden = false;
   } else {
@@ -215,6 +214,7 @@ const BEER_PRESET_IDS = new Set(['beer_regular', 'beer_pint']);
 function drinkIcon(preset_id) {
   if (BEER_PRESET_IDS.has(preset_id)) return '🍺';
   if (preset_id === 'champagne')       return '🥂';
+  if (preset_id === 'cocktail')        return '🍹';
   return '🍷';
 }
 
