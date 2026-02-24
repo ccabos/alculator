@@ -37,8 +37,8 @@ export function renderBACDisplay(bac_pct, bounds, showRange) {
   const rangeEl   = document.getElementById('bac-range');
   const cautionEl = document.getElementById('bac-caution');
 
-  // Numeric value
-  valueEl.textContent = bac_pct.toFixed(4);
+  // Numeric value (convert % BAC → promille: × 10)
+  valueEl.textContent = (bac_pct * 10).toFixed(3);
 
   // Badge
   const { cls, label } = bacCategory(bac_pct);
@@ -47,7 +47,7 @@ export function renderBACDisplay(bac_pct, bounds, showRange) {
 
   // Range string
   if (showRange && bounds) {
-    rangeEl.textContent = `Range: ${bounds.lower.toFixed(4)} – ${bounds.upper.toFixed(4)} %`;
+    rangeEl.textContent = `Range: ${(bounds.lower * 10).toFixed(3)} – ${(bounds.upper * 10).toFixed(3)} ‰`;
     rangeEl.hidden = false;
   } else {
     rangeEl.hidden = true;
@@ -144,7 +144,7 @@ export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, on
 
       return `<div class="log-entry log-entry-drink" data-kind="drink" data-index="${ev.index}"
               role="button" tabindex="0" aria-label="Edit ${esc(name)}">
-        <span class="log-entry-icon" aria-hidden="true">🍷</span>
+        <span class="log-entry-icon" aria-hidden="true">${drinkIcon(d.preset_id)}</span>
         <div class="log-entry-main">
           <div class="log-entry-name">${esc(name)}</div>
           <div class="log-entry-meta">${esc(meta)}</div>
@@ -206,6 +206,16 @@ export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, on
       onDeleteFood(Number(btn.dataset.index));
     });
   });
+}
+
+// ─── Drink icon ───────────────────────────────────────────────────────────────
+
+const BEER_PRESET_IDS = new Set(['beer_regular', 'beer_pint']);
+
+function drinkIcon(preset_id) {
+  if (BEER_PRESET_IDS.has(preset_id)) return '🍺';
+  if (preset_id === 'champagne')       return '🥂';
+  return '🍷';
 }
 
 // ─── Utility ──────────────────────────────────────────────────────────────────

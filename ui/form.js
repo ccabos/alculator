@@ -8,6 +8,8 @@
  */
 
 import { DURATION_QUICK_SELECT_MIN } from '../model/constants.js';
+
+const BEER_PRESET_IDS = new Set(['beer_regular', 'beer_pint']);
 import { saveSession }               from '../store/session.js';
 
 // ─── Edit state ────────────────────────────────────────────────────────────────
@@ -145,6 +147,7 @@ export function initDrinkPanel(presets, getSession, setSession) {
     customForm.hidden = true;
     presetGrid.hidden = false;
     customBtn.hidden  = false;
+    document.getElementById('drink-carbonated').closest('label').hidden = false;
     document.querySelector('#drink-panel .panel-header h2').textContent = 'Add Drink';
     document.getElementById('drink-custom-save').textContent = 'Log Drink';
   });
@@ -292,6 +295,10 @@ export function openDrinkPanelForEdit(drink, index) {
   document.getElementById('drink-duration').value   = drink.duration_min ?? 0;
   document.getElementById('drink-carbonated').checked = !!drink.carbonated;
   document.getElementById('drink-with-food').checked  = !!drink.with_food;
+
+  // Hide carbonated option for beer presets (carbonation is fixed)
+  document.getElementById('drink-carbonated').closest('label').hidden =
+    BEER_PRESET_IDS.has(drink.preset_id);
   document.getElementById('drink-time').value       = _minToTime(drink.time_min);
 
   // Sync duration quick-select buttons
@@ -340,6 +347,7 @@ export function resetDrinkPanel() {
   document.getElementById('drink-custom-form').hidden = true;
   document.getElementById('preset-grid').hidden        = false;
   document.getElementById('drink-custom-btn').hidden   = false;
+  document.getElementById('drink-carbonated').closest('label').hidden = false;
   document.querySelector('#drink-panel .panel-header h2').textContent = 'Add Drink';
   document.getElementById('drink-custom-save').textContent = 'Log Drink';
 }
