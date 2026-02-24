@@ -108,8 +108,10 @@ const MEAL_LABELS = {
  * @param {object[]} presets       — array of preset objects for name lookup
  * @param {Function} onDeleteDrink — callback(index)
  * @param {Function} onDeleteFood  — callback(index)
+ * @param {Function} onEditDrink   — callback(index)
+ * @param {Function} onEditFood    — callback(index)
  */
-export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, onDeleteFood) {
+export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, onDeleteFood, onEditDrink, onEditFood) {
   const container = document.getElementById('log-entries');
 
   if (drinks.length === 0 && food_events.length === 0) {
@@ -148,6 +150,8 @@ export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, on
         </div>
         <span class="log-entry-time">${fmtTime(d.time_min)}</span>
         <div class="log-entry-actions">
+          <button class="log-action-btn edit-drink-btn" data-index="${ev.index}"
+                  aria-label="Edit drink">✎</button>
           <button class="log-action-btn delete-drink-btn" data-index="${ev.index}"
                   aria-label="Delete drink">✕</button>
         </div>
@@ -163,6 +167,8 @@ export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, on
         </div>
         <span class="log-entry-time">${fmtTime(f.time_min)}</span>
         <div class="log-entry-actions">
+          <button class="log-action-btn edit-food-btn" data-index="${ev.index}"
+                  aria-label="Edit food event">✎</button>
           <button class="log-action-btn delete-food-btn" data-index="${ev.index}"
                   aria-label="Delete food event">✕</button>
         </div>
@@ -171,6 +177,14 @@ export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, on
   }).join('');
 
   container.innerHTML = html;
+
+  // Bind edit buttons
+  container.querySelectorAll('.edit-drink-btn').forEach(btn => {
+    btn.addEventListener('click', () => onEditDrink(Number(btn.dataset.index)));
+  });
+  container.querySelectorAll('.edit-food-btn').forEach(btn => {
+    btn.addEventListener('click', () => onEditFood(Number(btn.dataset.index)));
+  });
 
   // Bind delete buttons
   container.querySelectorAll('.delete-drink-btn').forEach(btn => {

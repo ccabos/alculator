@@ -10,6 +10,11 @@
 import { DURATION_QUICK_SELECT_MIN } from '../model/constants.js';
 import { saveSession }               from '../store/session.js';
 
+// ─── Edit state ────────────────────────────────────────────────────────────────
+let _editingDrinkIndex = null;
+let _editingFoodIndex  = null;
+let _selectedMeal      = null;
+
 // ─── Panel helpers ─────────────────────────────────────────────────────────────
 
 /**
@@ -134,12 +139,15 @@ export function initDrinkPanel(presets, getSession, setSession) {
     _setDefaultTime('drink-time');
   });
   cancelBtn.addEventListener('click', () => {
+    _editingDrinkIndex = null;
     customForm.hidden = true;
     presetGrid.hidden = false;
     customBtn.hidden  = false;
+    document.querySelector('#drink-panel .panel-header h2').textContent = 'Add Drink';
+    document.getElementById('drink-custom-save').textContent = 'Log Drink';
   });
 
-  // Save custom drink
+  // Save custom drink (handles both add and edit)
   document.getElementById('drink-custom-save').addEventListener('click', () => {
     const volume    = parseFloat(document.getElementById('drink-volume').value);
     const abv       = parseFloat(document.getElementById('drink-abv').value);
@@ -153,6 +161,11 @@ export function initDrinkPanel(presets, getSession, setSession) {
       return;
     }
 
+    const editIdx = _editingDrinkIndex;
+    _editingDrinkIndex = null;
+    document.querySelector('#drink-panel .panel-header h2').textContent = 'Add Drink';
+    document.getElementById('drink-custom-save').textContent = 'Log Drink';
+
     _saveDrink({
       volume_ml:    volume,
       abv_pct:      abv,
@@ -160,7 +173,7 @@ export function initDrinkPanel(presets, getSession, setSession) {
       with_food,
       duration_min: duration,
       time_min:     _timeToMin(timeVal),
-    }, getSession, setSession);
+    }, getSession, setSession, editIdx);
     closePanel('drink-panel');
   });
 }
@@ -175,29 +188,31 @@ export function initDrinkPanel(presets, getSession, setSession) {
 export function initFoodPanel(getSession, setSession) {
   _setDefaultTime('food-time');
 
-  let selectedMeal = null;
-
   document.querySelectorAll('.meal-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.meal-btn').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
-      selectedMeal = btn.dataset.meal;
+      _selectedMeal = btn.dataset.meal;
     });
   });
 
   document.getElementById('food-save').addEventListener('click', () => {
-    if (!selectedMeal) { alert('Select a meal size.'); return; }
+    if (!_selectedMeal) { alert('Select a meal size.'); return; }
     const timeVal = document.getElementById('food-time').value;
     const note    = document.getElementById('food-note').value.trim();
+    const foodEntry = { time_min: _timeToMin(timeVal), type: _selectedMeal, ...(note ? { note } : {}) };
 
     const session = getSession();
-    const updated = {
-      ...session,
-      food_events: [
-        ...session.food_events,
-        { time_min: _timeToMin(timeVal), type: selectedMeal, ...(note ? { note } : {}) },
-      ],
-    };
+    let updated;
+    if (_editingFoodIndex !== null) {
+      const food_events = session.food_events.map((f, i) => i === _editingFoodIndex ? foodEntry : f);
+      updated = { ...session, food_events };
+      _editingFoodIndex = null;
+      document.querySelector('#food-panel .panel-header h2').textContent = 'Log Food';
+      document.getElementById('food-save').textContent = 'Log Food';
+    } else {
+      updated = { ...session, food_events: [...session.food_events, foodEntry] };
+    }
     setSession(updated);
     saveSession(updated);
     closePanel('food-panel');
@@ -250,13 +265,91 @@ export function populateProfilePanel(profile) {
   if (profile.height_cm) document.getElementById('profile-height').value = profile.height_cm;
 }
 
+// ─── Edit-mode openers ─────────────────────────────────────────────────────────
+
+/**
+ * Open the drink panel pre-filled for editing an existing entry.
+ * @param {object} drink   — the drink object to edit
+ * @param {number} index   — its index in session.drinks
+ */
+export function openDrinkPanelForEdit(drink, index) {
+  _editingDrinkIndex = index;
+
+  // Show custom form, hide preset grid
+  document.getElementById('drink-custom-form').hidden = false;
+  document.getElementById('preset-grid').hidden        = true;
+  document.getElementById('drink-custom-btn').hidden   = true;
+
+  // Pre-fill fields
+  document.getElementById('drink-volume').value     = drink.volume_ml;
+  document.getElementById('drink-abv').value        = drink.abv_pct;
+  document.getElementById('drink-duration').value   = drink.duration_min ?? 0;
+  document.getElementById('drink-carbonated').checked = !!drink.carbonated;
+  document.getElementById('drink-with-food').checked  = !!drink.with_food;
+  document.getElementById('drink-time').value       = _minToTime(drink.time_min);
+
+  // Sync duration quick-select buttons
+  document.querySelectorAll('#duration-quick .quick-btn').forEach(btn => {
+    btn.classList.toggle('selected', btn.dataset.val === String(drink.duration_min ?? 0));
+  });
+
+  // Update panel title and save button
+  document.querySelector('#drink-panel .panel-header h2').textContent = 'Edit Drink';
+  document.getElementById('drink-custom-save').textContent = 'Save Changes';
+
+  openPanel('drink-panel');
+}
+
+/**
+ * Open the food panel pre-filled for editing an existing entry.
+ * @param {object} food    — the food_event object to edit
+ * @param {number} index   — its index in session.food_events
+ */
+export function openFoodPanelForEdit(food, index) {
+  _editingFoodIndex = index;
+  _selectedMeal     = food.type;
+
+  // Pre-select the matching meal button
+  document.querySelectorAll('.meal-btn').forEach(btn => {
+    btn.classList.toggle('selected', btn.dataset.meal === food.type);
+  });
+
+  // Pre-fill time and note
+  document.getElementById('food-time').value = _minToTime(food.time_min);
+  document.getElementById('food-note').value = food.note ?? '';
+
+  // Update panel title and save button
+  document.querySelector('#food-panel .panel-header h2').textContent = 'Edit Food';
+  document.getElementById('food-save').textContent = 'Save Changes';
+
+  openPanel('food-panel');
+}
+
+/**
+ * Reset the drink panel to "Add" mode (call before opening it normally).
+ */
+export function resetDrinkPanel() {
+  _editingDrinkIndex = null;
+  document.getElementById('drink-custom-form').hidden = true;
+  document.getElementById('preset-grid').hidden        = false;
+  document.getElementById('drink-custom-btn').hidden   = false;
+  document.querySelector('#drink-panel .panel-header h2').textContent = 'Add Drink';
+  document.getElementById('drink-custom-save').textContent = 'Log Drink';
+}
+
 // ─── Internal helpers ──────────────────────────────────────────────────────────
 
-function _saveDrink(drinkData, getSession, setSession) {
+function _saveDrink(drinkData, getSession, setSession, editIndex = null) {
   const now = drinkData.time_min ?? _nowMin();
   const drink = { time_min: now, ...drinkData };
   const session = getSession();
-  const updated = { ...session, drinks: [...session.drinks, drink] };
+  let updated;
+  if (editIndex !== null) {
+    const drinks = session.drinks.map((d, i) => i === editIndex ? drink : d);
+    updated = { ...session, drinks };
+  } else {
+    updated = { ...session, drinks: [...session.drinks, drink] };
+  }
   setSession(updated);
   saveSession(updated);
 }
@@ -280,6 +373,13 @@ function _timeToMin(timeStr) {
   if (!timeStr) return _nowMin();
   const [h, m] = timeStr.split(':').map(Number);
   return (h || 0) * 60 + (m || 0);
+}
+
+/** Convert minutes from midnight to HH:MM string for a time input. */
+function _minToTime(t_min) {
+  const h = Math.floor(t_min / 60) % 24;
+  const m = Math.round(t_min) % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 /** Escape HTML entities. */

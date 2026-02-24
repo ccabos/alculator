@@ -224,6 +224,7 @@ body {
   justify-content: center;
 }
 .log-action-btn:hover { color: var(--c-danger); border-color: var(--c-danger); }
+.edit-drink-btn:hover, .edit-food-btn:hover { color: var(--c-primary); border-color: var(--c-primary); }
 
 /* ── Footer / action bar ─────────────────────────────────────────────────────── */
 #footer {

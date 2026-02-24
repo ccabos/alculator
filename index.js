@@ -20,6 +20,7 @@ import { renderChart }  from './ui/chart.js';
 import {
   openPanel, closePanel,
   initDrinkPanel, initFoodPanel, initProfilePanel, populateProfilePanel,
+  openDrinkPanelForEdit, openFoodPanelForEdit, resetDrinkPanel,
 } from './ui/form.js';
 
 // ─── Application state ────────────────────────────────────────────────────────
@@ -63,7 +64,10 @@ async function boot() {
   populateProfilePanel(session.profile);
 
   // 3. Wire action-bar buttons
-  document.getElementById('add-drink-btn').addEventListener('click', () => openPanel('drink-panel'));
+  document.getElementById('add-drink-btn').addEventListener('click', () => {
+    resetDrinkPanel();
+    openPanel('drink-panel');
+  });
   document.getElementById('add-food-btn').addEventListener('click', () => openPanel('food-panel'));
   document.getElementById('profile-btn').addEventListener('click', () => {
     populateProfilePanel(session.profile);
@@ -158,7 +162,7 @@ function redraw() {
   document.getElementById('bac-display').style.opacity = profileComplete ? '1' : '0.3';
 
   if (!profileComplete) {
-    renderSessionLog(drinks, food_events, presets, _deleteDrink, _deleteFood);
+    renderSessionLog(drinks, food_events, presets, _deleteDrink, _deleteFood, _editDrink, _editFood);
     return;
   }
 
@@ -188,7 +192,7 @@ function redraw() {
   renderBACDisplay(bac_now, bounds, showUncertainty);
   renderSoberTime(sober_t);
   renderChart(extended, drinks, food_events, now_min, showUncertainty);
-  renderSessionLog(drinks, food_events, presets, _deleteDrink, _deleteFood);
+  renderSessionLog(drinks, food_events, presets, _deleteDrink, _deleteFood, _editDrink, _editFood);
 }
 
 // ─── Delete handlers ──────────────────────────────────────────────────────────
@@ -203,6 +207,16 @@ function _deleteFood(index) {
   session = { ...session, food_events: session.food_events.filter((_, i) => i !== index) };
   saveSession(session);
   redraw();
+}
+
+// ─── Edit handlers ─────────────────────────────────────────────────────────────
+
+function _editDrink(index) {
+  openDrinkPanelForEdit(session.drinks[index], index);
+}
+
+function _editFood(index) {
+  openFoodPanelForEdit(session.food_events[index], index);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
