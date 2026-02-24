@@ -105,15 +105,17 @@
             <input type="number" id="drink-abv" min="0" max="100" step="0.1" value="5.0">
           </label>
         </div>
-        <label>Time started
-          <input type="time" id="drink-time" aria-label="Drink start time">
-        </label>
-        <label>Drinking duration
-          <div id="duration-quick" class="quick-select" role="group"
-               aria-label="Drinking duration quick select"></div>
-          <input type="number" id="drink-duration" min="0" max="180" value="15"
-                 aria-label="Custom duration in minutes"> min
-        </label>
+        <div class="form-row">
+          <label>Time started
+            <input type="time" id="drink-time" aria-label="Drink start time">
+          </label>
+          <label>Duration (min)
+            <input type="number" id="drink-duration" min="0" max="180" value="15"
+                   aria-label="Custom duration in minutes">
+          </label>
+        </div>
+        <div id="duration-quick" class="quick-select" role="group"
+             aria-label="Drinking duration quick select"></div>
         <label>
           <input type="checkbox" id="drink-carbonated"> Carbonated
         </label>
