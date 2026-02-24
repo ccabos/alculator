@@ -24,7 +24,7 @@ import { BAC_THRESHOLDS }    from '../model/constants.js';
 const ML = 48;  // margin left (px)
 const MR = 12;  // margin right
 const MT = 20;  // margin top
-const MB = 48;  // margin bottom (room for time axis)
+const MB = 58;  // margin bottom (room for time axis + duration triangles)
 
 const REF_LINES = [
   { bac: 0.05, label: '0.5', color: '#f59e0b' },
@@ -63,7 +63,7 @@ export function renderChart(series, drinks, food_events, now_min) {
 
   // Determine chart dimensions from the element's rendered width
   const W = Math.max(375, svgEl.parentElement?.clientWidth || 375);
-  const H = Math.round(W * 0.45); // ~45 % aspect ratio
+  const H = Math.round(W * 0.50); // ~50 % aspect ratio (extra room for duration triangles)
   const PW = W - ML - MR;
   const PH = H - MT - MB;
 
@@ -157,14 +157,30 @@ export function renderChart(series, drinks, food_events, now_min) {
       fill="var(--c-muted,#6b7280)">now</text>`);
   }
 
-  // Drink tick marks on time axis
+  // Drink tick marks + duration triangles on time axis
+  const TRI_TOP = MT + PH + 10;  // top edge of triangle band
+  const TRI_BOT = MT + PH + 22;  // bottom edge of triangle band
+  const TRI_MID = (TRI_TOP + TRI_BOT) / 2;
+
   for (const d of drinks) {
     if (d.time_min < t_min_x || d.time_min > t_max_x) continue;
     const x = tx(d.time_min);
+
+    // Vertical tick at drink start
     parts.push(`<line x1="${x}" y1="${MT + PH}" x2="${x}" y2="${MT + PH + 8}"
       stroke="#2563eb" stroke-width="2"/>`);
-    parts.push(`<text x="${x}" y="${MT + PH + 26}" text-anchor="middle"
-      font-size="8" fill="#2563eb">${_drinkIcon(d.preset_id)}</text>`);
+
+    // Duration triangle: left base at drink start, right tip at drink end
+    const dur = d.duration_min ?? 0;
+    if (dur > 0) {
+      const x_tip = Math.min(tx(d.time_min + dur), ML + PW);
+      parts.push(`<polygon points="${x},${TRI_TOP} ${x},${TRI_BOT} ${x_tip},${TRI_MID}"
+        fill="#2563eb" fill-opacity="0.45" stroke="none"/>`);
+    }
+
+    // Drink icon below the triangle band
+    parts.push(`<text x="${x}" y="${MT + PH + 36}" text-anchor="middle"
+      font-size="10" fill="#2563eb">${_drinkIcon(d.preset_id)}</text>`);
   }
 
   // Food icons on time axis
@@ -172,7 +188,7 @@ export function renderChart(series, drinks, food_events, now_min) {
     if (f.time_min < t_min_x || f.time_min > t_max_x) continue;
     const x  = tx(f.time_min);
     const ab = MEAL_ABBR[f.type] ?? '?';
-    parts.push(`<text x="${x}" y="${MT + PH + 38}" text-anchor="middle"
+    parts.push(`<text x="${x}" y="${MT + PH + 50}" text-anchor="middle"
       font-size="8" fill="#16a34a">${ab}</text>`);
   }
 
