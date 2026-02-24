@@ -27,9 +27,17 @@ const MT = 20;  // margin top
 const MB = 48;  // margin bottom (room for time axis)
 
 const REF_LINES = [
-  { bac: 0.05, label: '0.05', color: '#f59e0b' },
-  { bac: 0.08, label: '0.08', color: '#ef4444' },
+  { bac: 0.05, label: '0.5', color: '#f59e0b' },
+  { bac: 0.08, label: '0.8', color: '#ef4444' },
 ];
+
+const BEER_PRESET_IDS = new Set(['beer_regular', 'beer_pint']);
+
+function _drinkIcon(preset_id) {
+  if (BEER_PRESET_IDS.has(preset_id)) return '🍺';
+  if (preset_id === 'champagne')       return '🥂';
+  return '🍷';
+}
 
 const MEAL_ABBR = {
   snack:      'S',
@@ -79,15 +87,19 @@ export function renderChart(series, drinks, food_events, now_min, showUncertaint
   parts.push(`<rect x="${ML}" y="${MT}" width="${PW}" height="${PH}"
     fill="var(--c-surface,#fff)" stroke="var(--c-border,#e5e7eb)" stroke-width="1"/>`);
 
-  // Y-axis grid lines + labels
+  // Y-axis grid lines + labels (values in promille: BAC% × 10)
   const yTicks = _niceTicks(0, bac_max, 5);
   for (const v of yTicks) {
     const y = by(v);
     parts.push(`<line x1="${ML}" y1="${y}" x2="${ML + PW}" y2="${y}"
       stroke="var(--c-border,#e5e7eb)" stroke-width="0.5"/>`);
     parts.push(`<text x="${ML - 4}" y="${y}" text-anchor="end" dominant-baseline="middle"
-      font-size="9" fill="var(--c-muted,#6b7280)">${v.toFixed(3)}</text>`);
+      font-size="9" fill="var(--c-muted,#6b7280)">${(v * 10).toFixed(2)}</text>`);
   }
+  // Y-axis title
+  parts.push(`<text x="${12}" y="${MT + PH / 2}" text-anchor="middle" dominant-baseline="middle"
+    font-size="9" fill="var(--c-muted,#6b7280)"
+    transform="rotate(-90, 12, ${MT + PH / 2})">‰</text>`);
 
   // Reference lines
   for (const ref of REF_LINES) {
@@ -96,7 +108,7 @@ export function renderChart(series, drinks, food_events, now_min, showUncertaint
     parts.push(`<line x1="${ML}" y1="${y}" x2="${ML + PW}" y2="${y}"
       stroke="${ref.color}" stroke-width="1" stroke-dasharray="4,3"/>`);
     parts.push(`<text x="${ML + PW - 2}" y="${y - 3}" text-anchor="end"
-      font-size="9" fill="${ref.color}">${ref.label}%</text>`);
+      font-size="9" fill="${ref.color}">${ref.label} ‰</text>`);
   }
 
   // X-axis time labels
@@ -152,7 +164,7 @@ export function renderChart(series, drinks, food_events, now_min, showUncertaint
     parts.push(`<line x1="${x}" y1="${MT + PH}" x2="${x}" y2="${MT + PH + 8}"
       stroke="#2563eb" stroke-width="2"/>`);
     parts.push(`<text x="${x}" y="${MT + PH + 26}" text-anchor="middle"
-      font-size="8" fill="#2563eb">🍷</text>`);
+      font-size="8" fill="#2563eb">${_drinkIcon(d.preset_id)}</text>`);
   }
 
   // Food icons on time axis
@@ -209,7 +221,7 @@ function _bindTooltip(svgEl, series, t_min_x, t_max_x, PW, ML, MT) {
     const nearest = series.reduce((best, p) =>
       Math.abs(p.t_min - t) < Math.abs(best.t_min - t) ? p : best
     );
-    tooltip.textContent = `${nearest.bac_pct.toFixed(4)} %  ·  ${_fmtHHMM(nearest.t_min)}`;
+    tooltip.textContent = `${(nearest.bac_pct * 10).toFixed(3)} ‰  ·  ${_fmtHHMM(nearest.t_min)}`;
     tooltip.hidden = false;
     tooltip.style.left = `${Math.min(clientX + 8, window.innerWidth - 120)}px`;
     tooltip.style.top  = `${(e.touches ? e.touches[0].clientY : e.clientY) - 30}px`;
