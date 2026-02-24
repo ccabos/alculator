@@ -232,6 +232,42 @@ function _sessionAge(saved_at) {
   return diff / 60_000;
 }
 
+// ─── PWA install prompt ────────────────────────────────────────────────────────
+
+(function initInstall() {
+  const btn = document.getElementById('install-btn');
+  let deferredPrompt = null;
+
+  // Android/Chrome: capture the install prompt
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    btn.hidden = false;
+  });
+
+  btn.addEventListener('click', async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    btn.hidden = true;
+  });
+
+  // Hide button once installed
+  window.addEventListener('appinstalled', () => { btn.hidden = true; });
+
+  // iOS Safari: show the share-sheet hint if not already in standalone mode
+  const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isStandalone = window.navigator.standalone === true;
+  if (isIos && !isStandalone) {
+    const banner = document.getElementById('ios-install-banner');
+    banner.hidden = false;
+    document.getElementById('ios-install-close').addEventListener('click', () => {
+      banner.hidden = true;
+    });
+  }
+})();
+
 // ─── Start ────────────────────────────────────────────────────────────────────
 
 boot();

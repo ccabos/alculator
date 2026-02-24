@@ -81,6 +81,9 @@
       <span class="btn-icon">↑</span>Import
     </button>
     <input type="file" id="import-file-input" accept=".json" hidden aria-hidden="true">
+    <button id="install-btn" class="btn btn-secondary action-btn" aria-label="Install app" hidden>
+      <span class="btn-icon">⬇</span>Install
+    </button>
   </footer>
 
   <!-- ── Panels (bottom sheets / modals) ───────────────────────────────────────── -->
@@ -195,6 +198,19 @@
   <!-- Panel backdrop -->
   <div id="panel-backdrop" class="panel-backdrop" hidden></div>
 
+  <!-- ── iOS install hint (shown only on iOS Safari, not in standalone mode) ── -->
+  <div id="ios-install-banner" hidden>
+    To install: tap <strong>Share</strong> then <strong>Add to Home Screen</strong>.
+    <button id="ios-install-close" aria-label="Dismiss install hint">✕</button>
+  </div>
+
   <script type="module" src="index.js"></script>
+
+  <!-- ── Service worker registration ─────────────────────────────────────── -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js');
+    }
+  </script>
 </body>
 </html>
