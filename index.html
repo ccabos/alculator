@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1d4ed8">
+  <title>Alculator — BAC Tracker</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ── Disclaimer (AC-07: visible above fold on 375 px screen) ─────────────── -->
+  <div id="disclaimer" role="note" aria-label="Medical disclaimer">
+    <strong>Informational only.</strong> Do not drive or make safety-critical
+    decisions based on this estimate. Individual results vary significantly.
+    <button id="disclaimer-close" aria-label="Dismiss disclaimer">✕</button>
+  </div>
+
+  <!-- ── Header: BAC readout ──────────────────────────────────────────────────── -->
+  <header id="header">
+    <div id="bac-display">
+      <span id="bac-value" aria-live="polite" aria-label="Current BAC estimate">—</span>
+      <span id="bac-unit">% BAC</span>
+      <span id="bac-badge" class="badge badge-sober">—</span>
+    </div>
+    <div id="bac-meta">
+      <span id="bac-range" class="bac-range" hidden></span>
+      <span id="bac-caution" class="bac-caution" hidden>
+        ⚠ Upper estimate exceeds 0.08 %
+      </span>
+    </div>
+    <div id="sober-time-row">
+      <span id="sober-label">Sober by:</span>
+      <span id="sober-time" aria-live="polite">—</span>
+    </div>
+    <div id="header-controls">
+      <label class="toggle-label">
+        <input type="checkbox" id="uncertainty-toggle" aria-label="Show uncertainty band">
+        Show ±21 % range
+      </label>
+      <button id="refresh-btn" aria-label="Refresh BAC estimate">↻</button>
+    </div>
+  </header>
+
+  <!-- ── Main content ──────────────────────────────────────────────────────────── -->
+  <main id="main">
+
+    <!-- Profile guard (shown when profile is incomplete) -->
+    <div id="profile-guard" role="alert" hidden>
+      <p>Enter your <strong>sex, weight, age</strong> to see your BAC estimate.</p>
+      <button id="open-profile-btn" class="btn btn-primary">Set up profile</button>
+    </div>
+
+    <!-- BAC chart (SVG rendered by ui/chart.js) -->
+    <section id="chart-area" aria-label="BAC over time chart">
+      <svg id="bac-chart" role="img" aria-label="Blood alcohol concentration curve"></svg>
+    </section>
+
+    <!-- Session log -->
+    <section id="session-log" aria-label="Drink and food log">
+      <h2 class="section-heading">Session log</h2>
+      <div id="log-entries" aria-live="polite">
+        <p class="log-empty">No drinks logged yet.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── Footer: action bar ────────────────────────────────────────────────────── -->
+  <footer id="footer">
+    <button id="add-drink-btn"  class="btn btn-primary action-btn" aria-label="Add drink">
+      <span class="btn-icon">🍷</span>Add Drink
+    </button>
+    <button id="add-food-btn"   class="btn btn-secondary action-btn" aria-label="Log food">
+      <span class="btn-icon">🍽</span>Food
+    </button>
+    <button id="profile-btn"    class="btn btn-secondary action-btn" aria-label="Edit profile">
+      <span class="btn-icon">👤</span>Profile
+    </button>
+    <button id="export-btn"     class="btn btn-secondary action-btn" aria-label="Export session">
+      <span class="btn-icon">↓</span>Export
+    </button>
+    <button id="import-btn"     class="btn btn-secondary action-btn" aria-label="Import session">
+      <span class="btn-icon">↑</span>Import
+    </button>
+    <input type="file" id="import-file-input" accept=".json" hidden aria-hidden="true">
+  </footer>
+
+  <!-- ── Panels (bottom sheets / modals) ───────────────────────────────────────── -->
+
+  <!-- Drink entry panel -->
+  <div id="drink-panel" class="panel" role="dialog" aria-modal="true"
+       aria-label="Log a drink" hidden>
+    <div class="panel-inner">
+      <div class="panel-header">
+        <h2>Add Drink</h2>
+        <button class="panel-close" data-close="drink-panel" aria-label="Close">✕</button>
+      </div>
+      <div id="preset-grid" class="preset-grid" role="list"
+           aria-label="Drink presets"></div>
+      <div id="drink-custom-form" class="custom-form" hidden>
+        <label>Volume (mL)
+          <input type="number" id="drink-volume" min="1" max="2000" value="330">
+        </label>
+        <label>ABV (%)
+          <input type="number" id="drink-abv" min="0" max="100" step="0.1" value="5.0">
+        </label>
+        <label>Drinking duration
+          <div id="duration-quick" class="quick-select" role="group"
+               aria-label="Drinking duration quick select"></div>
+          <input type="number" id="drink-duration" min="0" max="180" value="15"
+                 aria-label="Custom duration in minutes"> min
+        </label>
+        <label>
+          <input type="checkbox" id="drink-carbonated"> Carbonated
+        </label>
+        <label>
+          <input type="checkbox" id="drink-with-food"> Eating alongside
+        </label>
+        <label>Time started
+          <input type="time" id="drink-time" aria-label="Drink start time">
+        </label>
+        <div class="form-actions">
+          <button id="drink-custom-cancel" class="btn btn-secondary">Back</button>
+          <button id="drink-custom-save"   class="btn btn-primary">Log Drink</button>
+        </div>
+      </div>
+      <button id="drink-custom-btn" class="btn btn-secondary">Custom drink</button>
+    </div>
+  </div>
+
+  <!-- Food entry panel -->
+  <div id="food-panel" class="panel" role="dialog" aria-modal="true"
+       aria-label="Log food" hidden>
+    <div class="panel-inner">
+      <div class="panel-header">
+        <h2>Log Food</h2>
+        <button class="panel-close" data-close="food-panel" aria-label="Close">✕</button>
+      </div>
+      <div class="meal-buttons" role="group" aria-label="Meal size">
+        <button class="meal-btn btn btn-secondary" data-meal="snack">Snack</button>
+        <button class="meal-btn btn btn-secondary" data-meal="light_meal">Light meal</button>
+        <button class="meal-btn btn btn-secondary" data-meal="full_meal">Full meal</button>
+        <button class="meal-btn btn btn-secondary" data-meal="heavy_meal">Heavy meal</button>
+      </div>
+      <label class="food-time-label">Time
+        <input type="time" id="food-time" aria-label="Food time">
+      </label>
+      <label>Note (optional)
+        <input type="text" id="food-note" maxlength="80" placeholder="e.g. pizza">
+      </label>
+      <div class="form-actions">
+        <button class="panel-close btn btn-secondary" data-close="food-panel">Cancel</button>
+        <button id="food-save" class="btn btn-primary">Log Food</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Profile panel -->
+  <div id="profile-panel" class="panel" role="dialog" aria-modal="true"
+       aria-label="Edit profile" hidden>
+    <div class="panel-inner">
+      <div class="panel-header">
+        <h2>Profile</h2>
+        <button class="panel-close" data-close="profile-panel" aria-label="Close">✕</button>
+      </div>
+      <label>Sex
+        <select id="profile-sex">
+          <option value="">— select —</option>
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+        </select>
+      </label>
+      <label>Weight (kg)
+        <input type="number" id="profile-weight" min="30" max="300" step="0.5"
+               placeholder="e.g. 70">
+      </label>
+      <label>Age (years)
+        <input type="number" id="profile-age" min="13" max="120" step="1"
+               placeholder="e.g. 30">
+      </label>
+      <label>Height (cm) <em class="optional">(optional — improves accuracy)</em>
+        <input type="number" id="profile-height" min="100" max="250" step="1"
+               placeholder="e.g. 175">
+      </label>
+      <p id="profile-age-warning" class="age-warning" hidden>
+        ⚠ Alculator is intended for adults 18+. Alcohol is harmful to developing brains.
+      </p>
+      <div class="form-actions">
+        <button class="panel-close btn btn-secondary" data-close="profile-panel">Cancel</button>
+        <button id="profile-save" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Panel backdrop -->
+  <div id="panel-backdrop" class="panel-backdrop" hidden></div>
+
+  <script type="module" src="index.js"></script>
+</body>
+</html>

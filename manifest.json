@@ -1,0 +1,26 @@
+{
+  "name": "Alculator — BAC Tracker",
+  "short_name": "Alculator",
+  "description": "Personal blood-alcohol concentration estimator. Informational only — do not use for safety-critical decisions.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f9fafb",
+  "theme_color": "#1d4ed8",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "images/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "images/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["health", "utilities"]
+}
