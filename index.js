@@ -158,18 +158,21 @@ function redraw() {
     return;
   }
 
+  // Normalize times so after-midnight events appear after the evening events
+  const { drinks: nDrinks, food_events: nFood, now_min } =
+    _normalizeTimes(drinks, food_events, _nowMin());
+
   // Compute time window
-  const now_min = _nowMin();
   const all_t   = [
     now_min,
-    ...drinks.map(d => d.time_min),
-    ...food_events.map(f => f.time_min),
+    ...nDrinks.map(d => d.time_min),
+    ...nFood.map(f => f.time_min),
   ];
   const t_start = Math.min(...all_t) - 30;
   const t_end   = now_min + 120; // always show at least 2 h ahead
 
   // Run simulation
-  const series   = bacSeries(drinks, food_events, profile, t_start, t_end);
+  const series   = bacSeries(nDrinks, nFood, profile, t_start, t_end);
   const now_idx  = series.findIndex(p => p.t_min >= now_min) ?? series.length - 1;
   const bac_now  = series[Math.max(0, now_idx)]?.bac_pct ?? 0;
   const bounds   = uncertaintyBounds(bac_now);
@@ -179,7 +182,7 @@ function redraw() {
 
   if (sober_t !== null && sober_t > t_end) {
     // BAC was still above threshold at the 2 h horizon; extend 6 h further to find real sober time
-    extended = bacSeries(drinks, food_events, profile, t_start, sober_t + 360);
+    extended = bacSeries(nDrinks, nFood, profile, t_start, sober_t + 360);
     sober_t  = findSoberTime(extended);
     // If BAC is still above threshold at the extended horizon, give up
     if (sober_t !== null && sober_t > extended[extended.length - 1].t_min) {
@@ -187,11 +190,12 @@ function redraw() {
     }
   }
 
-  // Render
+  // Render (nDrinks/nFood used for chart positioning; fmtTime uses % 24 so
+  // values >1440 still display as correct clock times in the log)
   renderBACDisplay(bac_now, bounds);
   renderSoberTime(sober_t);
-  renderChart(extended, drinks, food_events, now_min);
-  renderSessionLog(drinks, food_events, presets, _deleteDrink, _deleteFood, _editDrink, _editFood);
+  renderChart(extended, nDrinks, nFood, now_min);
+  renderSessionLog(nDrinks, nFood, presets, _deleteDrink, _deleteFood, _editDrink, _editFood);
 }
 
 // ─── Delete handlers ──────────────────────────────────────────────────────────
@@ -223,6 +227,32 @@ function _editFood(index) {
 function _nowMin() {
   const d = new Date();
   return d.getHours() * 60 + d.getMinutes();
+}
+
+/**
+ * Offset drink/food times that crossed midnight so the timeline stays
+ * monotonically increasing.
+ *
+ * Strategy: find the latest time_min in the session. Any event more than
+ * 12 h (720 min) earlier than that anchor is assumed to have wrapped past
+ * midnight and gets +1440. `now_min` is treated the same way.
+ *
+ * Example: session started at 22:00 (1320), now is 01:30 (90).
+ * tMax = 1320. shift(90) → 90+1440 = 1530. ✓
+ */
+function _normalizeTimes(drinks, food_events, now_min) {
+  const allTimes = [
+    ...drinks.map(d => d.time_min),
+    ...food_events.map(f => f.time_min),
+  ];
+  if (allTimes.length === 0) return { drinks, food_events, now_min };
+  const tMax  = Math.max(...allTimes);
+  const shift = t => (tMax - t > 720 ? t + 1440 : t);
+  return {
+    drinks:      drinks.map(d      => ({ ...d, time_min: shift(d.time_min) })),
+    food_events: food_events.map(f => ({ ...f, time_min: shift(f.time_min) })),
+    now_min:     shift(now_min),
+  };
 }
 
 /** Age of a stored session in minutes. Returns Infinity if no timestamp. */
