@@ -38,7 +38,7 @@ export function renderBACDisplay(bac_pct, bounds, showRange) {
   const cautionEl = document.getElementById('bac-caution');
 
   // Numeric value (convert % BAC → promille: × 10)
-  valueEl.textContent = (bac_pct * 10).toFixed(3);
+  valueEl.textContent = (bac_pct * 10).toFixed(2);
 
   // Badge
   const { cls, label } = bacCategory(bac_pct);
@@ -47,7 +47,7 @@ export function renderBACDisplay(bac_pct, bounds, showRange) {
 
   // Range string
   if (showRange && bounds) {
-    rangeEl.textContent = `Range: ${(bounds.lower * 10).toFixed(3)} – ${(bounds.upper * 10).toFixed(3)} ‰`;
+    rangeEl.textContent = `Range: ${(bounds.lower * 10).toFixed(2)} – ${(bounds.upper * 10).toFixed(2)} ‰`;
     rangeEl.hidden = false;
   } else {
     rangeEl.hidden = true;
