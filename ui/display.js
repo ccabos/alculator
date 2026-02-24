@@ -142,7 +142,8 @@ export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, on
         d.with_food   ? 'with food'  : null,
       ].filter(Boolean).join(' · ');
 
-      return `<div class="log-entry" data-kind="drink" data-index="${ev.index}">
+      return `<div class="log-entry log-entry-drink" data-kind="drink" data-index="${ev.index}"
+              role="button" tabindex="0" aria-label="Edit ${esc(name)}">
         <span class="log-entry-icon" aria-hidden="true">🍷</span>
         <div class="log-entry-main">
           <div class="log-entry-name">${esc(name)}</div>
@@ -150,8 +151,6 @@ export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, on
         </div>
         <span class="log-entry-time">${fmtTime(d.time_min)}</span>
         <div class="log-entry-actions">
-          <button class="log-action-btn edit-drink-btn" data-index="${ev.index}"
-                  aria-label="Edit drink">✎</button>
           <button class="log-action-btn delete-drink-btn" data-index="${ev.index}"
                   aria-label="Delete drink">✕</button>
         </div>
@@ -159,7 +158,8 @@ export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, on
     } else {
       const f = ev.data;
       const label = MEAL_LABELS[f.type] ?? f.type;
-      return `<div class="log-entry" data-kind="food" data-index="${ev.index}">
+      return `<div class="log-entry log-entry-food" data-kind="food" data-index="${ev.index}"
+              role="button" tabindex="0" aria-label="Edit ${esc(label)}">
         <span class="log-entry-icon" aria-hidden="true">🍽</span>
         <div class="log-entry-main">
           <div class="log-entry-name">${esc(label)}</div>
@@ -167,8 +167,6 @@ export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, on
         </div>
         <span class="log-entry-time">${fmtTime(f.time_min)}</span>
         <div class="log-entry-actions">
-          <button class="log-action-btn edit-food-btn" data-index="${ev.index}"
-                  aria-label="Edit food event">✎</button>
           <button class="log-action-btn delete-food-btn" data-index="${ev.index}"
                   aria-label="Delete food event">✕</button>
         </div>
@@ -178,20 +176,35 @@ export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, on
 
   container.innerHTML = html;
 
-  // Bind edit buttons
-  container.querySelectorAll('.edit-drink-btn').forEach(btn => {
-    btn.addEventListener('click', () => onEditDrink(Number(btn.dataset.index)));
-  });
-  container.querySelectorAll('.edit-food-btn').forEach(btn => {
-    btn.addEventListener('click', () => onEditFood(Number(btn.dataset.index)));
-  });
+  // Clicking anywhere on the entry row opens the edit panel;
+  // clicks on the delete button are handled by the button itself.
+  function _bindRowEdit(selector, onEdit) {
+    container.querySelectorAll(selector).forEach(row => {
+      const handler = e => {
+        if (e.target.closest('.log-action-btn')) return;
+        onEdit(Number(row.dataset.index));
+      };
+      row.addEventListener('click', handler);
+      row.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(e); }
+      });
+    });
+  }
+  _bindRowEdit('.log-entry-drink', onEditDrink);
+  _bindRowEdit('.log-entry-food',  onEditFood);
 
   // Bind delete buttons
   container.querySelectorAll('.delete-drink-btn').forEach(btn => {
-    btn.addEventListener('click', () => onDeleteDrink(Number(btn.dataset.index)));
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      onDeleteDrink(Number(btn.dataset.index));
+    });
   });
   container.querySelectorAll('.delete-food-btn').forEach(btn => {
-    btn.addEventListener('click', () => onDeleteFood(Number(btn.dataset.index)));
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      onDeleteFood(Number(btn.dataset.index));
+    });
   });
 }
 

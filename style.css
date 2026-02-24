@@ -202,7 +202,13 @@ body {
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--c-border);
   font-size: 0.9rem;
+  cursor: pointer;
+  border-radius: var(--radius);
+  margin: 0 -0.25rem;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
 }
+.log-entry:hover { background: var(--c-border); }
 .log-entry:last-child { border-bottom: none; }
 .log-entry-icon { font-size: 1.1rem; flex-shrink: 0; }
 .log-entry-main { flex: 1; min-width: 0; }
@@ -224,7 +230,6 @@ body {
   justify-content: center;
 }
 .log-action-btn:hover { color: var(--c-danger); border-color: var(--c-danger); }
-.edit-drink-btn:hover, .edit-food-btn:hover { color: var(--c-primary); border-color: var(--c-primary); }
 
 /* ── Footer / action bar ─────────────────────────────────────────────────────── */
 #footer {
