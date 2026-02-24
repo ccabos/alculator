@@ -173,12 +173,19 @@ function redraw() {
   const now_idx  = series.findIndex(p => p.t_min >= now_min) ?? series.length - 1;
   const bac_now  = series[Math.max(0, now_idx)]?.bac_pct ?? 0;
   const bounds   = uncertaintyBounds(bac_now);
-  const sober_t  = findSoberTime(series);
+  // Find sober time — extend series if BAC is still above threshold at the view horizon
+  let sober_t = findSoberTime(series);
+  let extended = series;
 
-  // Extend series to sober time if needed
-  const extended = (sober_t && sober_t > t_end)
-    ? bacSeries(drinks, food_events, profile, t_start, sober_t + 30)
-    : series;
+  if (sober_t !== null && sober_t > t_end) {
+    // BAC was still above threshold at the 2 h horizon; extend 6 h further to find real sober time
+    extended = bacSeries(drinks, food_events, profile, t_start, sober_t + 360);
+    sober_t  = findSoberTime(extended);
+    // If BAC is still above threshold at the extended horizon, give up
+    if (sober_t !== null && sober_t > extended[extended.length - 1].t_min) {
+      sober_t = null;
+    }
+  }
 
   // Render
   renderBACDisplay(bac_now, bounds);
