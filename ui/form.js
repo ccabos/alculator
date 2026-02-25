@@ -7,16 +7,18 @@
  * alculator:session-changed after each save.
  */
 
-import { DURATION_QUICK_SELECT_MIN } from '../model/constants.js';
+import { DURATION_QUICK_SELECT_MIN, DEFAULT_DRINK_PRESETS } from '../model/constants.js';
+import { loadPresets, savePreset, deletePreset, resetPresets } from '../store/presets.js';
 
 const BEER_PRESET_IDS = new Set(['beer_regular', 'beer_pint']);
-import { saveSession }               from '../store/session.js';
+import { saveSession } from '../store/session.js';
 
-// ─── Edit state ────────────────────────────────────────────────────────────────
+// ─── Module state ──────────────────────────────────────────────────────────────
 let _editingDrinkIndex    = null;
 let _editingDrinkPresetId = null;
 let _editingFoodIndex     = null;
 let _selectedMeal         = null;
+let _presetSelectCallback = null; // kept so refreshPresetGrid can re-render
 
 // ─── Panel helpers ─────────────────────────────────────────────────────────────
 
@@ -114,8 +116,7 @@ export function renderDurationQuickSelect() {
  * @param {Function}  setSession  — (session) => void
  */
 export function initDrinkPanel(presets, getSession, setSession) {
-  renderPresetGrid(presets, preset => {
-    // Log preset with defaults; close panel immediately
+  _presetSelectCallback = preset => {
     _saveDrink({
       preset_id:    preset.id,
       volume_ml:    preset.volume_ml,
@@ -125,7 +126,8 @@ export function initDrinkPanel(presets, getSession, setSession) {
       duration_min: preset.duration_min,
     }, getSession, setSession);
     closePanel('drink-panel');
-  });
+  };
+  renderPresetGrid(presets, _presetSelectCallback);
 
   renderDurationQuickSelect();
 
@@ -350,6 +352,139 @@ export function resetDrinkPanel() {
   document.getElementById('drink-carbonated').closest('label').hidden = false;
   document.querySelector('#drink-panel .panel-header h2').textContent = 'Add Drink';
   document.getElementById('drink-custom-save').textContent = 'Log Drink';
+}
+
+// ─── Preset manager ────────────────────────────────────────────────────────────
+
+/**
+ * Re-render the preset grid in the drink panel (call after preset changes).
+ * @param {object[]} presets
+ */
+export function refreshPresetGrid(presets) {
+  if (_presetSelectCallback) renderPresetGrid(presets, _presetSelectCallback);
+}
+
+/**
+ * Initialise the preset manager panel.
+ *
+ * @param {Function} onChanged — called after any save / delete / reset so
+ *                               the caller can refresh the drink panel grid.
+ * @returns {{ open(): void }}  — call open() to show the panel with a fresh list
+ */
+export function initPresetPanel(onChanged) {
+  const listEl      = document.getElementById('preset-manage-list');
+  const listActions = document.getElementById('preset-list-actions');
+  const editForm    = document.getElementById('preset-edit-form');
+
+  function renderList() {
+    const presets = loadPresets();
+    if (presets.length === 0) {
+      listEl.innerHTML = '<p class="log-empty">No presets.</p>';
+      return;
+    }
+    const builtinIds = new Set(DEFAULT_DRINK_PRESETS.map(p => p.id));
+    listEl.innerHTML = presets.map(p => `
+      <div class="log-entry">
+        <div class="log-entry-main">
+          <div class="log-entry-name">${esc(p.name)}</div>
+          <div class="log-entry-meta">${p.volume_ml} mL · ${p.abv_pct}% · ${p.duration_min} min${p.carbonated ? ' · carbonated' : ''}</div>
+        </div>
+        <div class="log-entry-actions">
+          <button class="log-action-btn preset-edit-btn" data-id="${p.id}" aria-label="Edit ${esc(p.name)}">✎</button>
+          <button class="log-action-btn preset-delete-btn" data-id="${p.id}"
+                  aria-label="${builtinIds.has(p.id) ? 'Hide' : 'Delete'} ${esc(p.name)}">✕</button>
+        </div>
+      </div>
+    `).join('');
+
+    listEl.querySelectorAll('.preset-edit-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const preset = presets.find(p => p.id === btn.dataset.id);
+        if (preset) showForm(preset);
+      });
+    });
+    listEl.querySelectorAll('.preset-delete-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const preset = presets.find(p => p.id === btn.dataset.id);
+        if (!preset) return;
+        const label = builtinIds.has(preset.id) ? `Hide "${preset.name}"?` : `Delete "${preset.name}"?`;
+        if (window.confirm(label)) {
+          deletePreset(preset.id);
+          renderList();
+          onChanged();
+        }
+      });
+    });
+  }
+
+  function showForm(preset = null) {
+    listEl.hidden      = true;
+    listActions.hidden = true;
+    editForm.hidden    = false;
+    document.getElementById('preset-form-title').textContent = preset ? 'Edit Preset' : 'New Preset';
+    document.getElementById('preset-edit-id').value       = preset?.id ?? '';
+    document.getElementById('preset-edit-name').value     = preset?.name ?? '';
+    document.getElementById('preset-edit-volume').value   = preset?.volume_ml ?? '';
+    document.getElementById('preset-edit-abv').value      = preset?.abv_pct ?? '';
+    document.getElementById('preset-edit-duration').value = preset?.duration_min ?? 15;
+    document.getElementById('preset-edit-carbonated').checked = preset?.carbonated ?? false;
+    document.getElementById('preset-edit-name').focus();
+  }
+
+  function hideForm() {
+    editForm.hidden    = false; // keep re-checking after hide
+    editForm.hidden    = true;
+    listEl.hidden      = false;
+    listActions.hidden = false;
+  }
+
+  document.getElementById('preset-add-btn').addEventListener('click', () => showForm(null));
+  document.getElementById('preset-edit-cancel').addEventListener('click', hideForm);
+
+  document.getElementById('preset-edit-save').addEventListener('click', () => {
+    const id       = document.getElementById('preset-edit-id').value;
+    const name     = document.getElementById('preset-edit-name').value.trim();
+    const volume   = parseFloat(document.getElementById('preset-edit-volume').value);
+    const abv      = parseFloat(document.getElementById('preset-edit-abv').value);
+    const duration = parseInt(document.getElementById('preset-edit-duration').value, 10) || 0;
+    const carbonated = document.getElementById('preset-edit-carbonated').checked;
+
+    if (!name || !volume || isNaN(volume) || isNaN(abv)) {
+      alert('Please fill in name, volume, and ABV.');
+      return;
+    }
+    try {
+      savePreset({ id: id || `custom_${Date.now()}`, name, volume_ml: volume,
+                   abv_pct: abv, duration_min: duration, carbonated });
+      hideForm();
+      renderList();
+      onChanged();
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+
+  document.getElementById('preset-reset-btn').addEventListener('click', () => {
+    if (window.confirm('Reset all presets to factory defaults? Your custom presets will be lost.')) {
+      resetPresets();
+      renderList();
+      onChanged();
+    }
+  });
+
+  document.querySelectorAll('.panel-close[data-close="preset-manage-panel"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      hideForm();
+      closePanel('preset-manage-panel');
+    });
+  });
+
+  return {
+    open() {
+      renderList();
+      openPanel('preset-manage-panel');
+    },
+  };
 }
 
 // ─── Internal helpers ──────────────────────────────────────────────────────────

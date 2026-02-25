@@ -454,6 +454,17 @@ label.toggle-label { flex-direction: row; align-items: center; }
   box-shadow: var(--shadow);
 }
 
+/* ── Preset manager ─────────────────────────────────────────────────────────── */
+.preset-list-actions {
+  justify-content: space-between;
+  margin-top: 0.25rem;
+}
+.preset-form-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--c-text);
+}
+
 /* ── iOS install banner ──────────────────────────────────────────────────────── */
 #ios-install-banner {
   background: #eff6ff;

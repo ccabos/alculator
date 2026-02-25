@@ -21,6 +21,7 @@ import {
   openPanel, closePanel,
   initDrinkPanel, initFoodPanel, initProfilePanel, populateProfilePanel,
   openDrinkPanelForEdit, openFoodPanelForEdit, resetDrinkPanel,
+  refreshPresetGrid, initPresetPanel,
 } from './ui/form.js';
 
 // ─── Application state ────────────────────────────────────────────────────────
@@ -60,6 +61,15 @@ async function boot() {
   initFoodPanel(getSession, setSession);
   initProfilePanel(getSession, setSession);
   populateProfilePanel(session.profile);
+
+  // Preset manager — refresh the drink panel grid whenever presets change
+  const presetMgr = initPresetPanel(() => {
+    refreshPresetGrid(loadPresets());
+    redraw();
+  });
+  document.getElementById('manage-presets-btn').addEventListener('click', () => {
+    presetMgr.open();
+  });
 
   // 3. Wire action-bar buttons
   document.getElementById('add-drink-btn').addEventListener('click', () => {

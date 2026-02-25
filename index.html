@@ -129,6 +129,7 @@
         <button id="drink-custom-cancel" class="btn btn-secondary">Back</button>
       </div>
       <button id="drink-custom-btn" class="btn btn-secondary">Custom drink</button>
+      <button id="manage-presets-btn" class="btn btn-secondary">Manage presets…</button>
     </div>
   </div>
 
@@ -192,6 +193,51 @@
       <div class="form-actions">
         <button class="panel-close btn btn-secondary" data-close="profile-panel">Cancel</button>
         <button id="profile-save" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preset manager panel -->
+  <div id="preset-manage-panel" class="panel" role="dialog" aria-modal="true"
+       aria-label="Manage presets" hidden>
+    <div class="panel-inner">
+      <div class="panel-header">
+        <h2>Manage Presets</h2>
+        <button class="panel-close" data-close="preset-manage-panel" aria-label="Close">✕</button>
+      </div>
+
+      <!-- List view -->
+      <div id="preset-manage-list"></div>
+      <div id="preset-list-actions" class="form-actions preset-list-actions">
+        <button id="preset-reset-btn" class="btn btn-secondary">Reset to defaults</button>
+        <button id="preset-add-btn"   class="btn btn-primary">+ Add preset</button>
+      </div>
+
+      <!-- Edit / add form (hidden by default) -->
+      <div id="preset-edit-form" class="custom-form" hidden>
+        <h3 id="preset-form-title" class="preset-form-title">Edit Preset</h3>
+        <input type="hidden" id="preset-edit-id">
+        <label>Name
+          <input type="text" id="preset-edit-name" maxlength="40" placeholder="e.g. IPA">
+        </label>
+        <div class="form-row">
+          <label>Volume (mL)
+            <input type="number" id="preset-edit-volume" min="1" max="2000">
+          </label>
+          <label>ABV (%)
+            <input type="number" id="preset-edit-abv" min="0" max="100" step="0.1">
+          </label>
+        </div>
+        <label>Duration (min)
+          <input type="number" id="preset-edit-duration" min="0" max="180">
+        </label>
+        <label>
+          <input type="checkbox" id="preset-edit-carbonated"> Carbonated
+        </label>
+        <div class="form-actions">
+          <button id="preset-edit-cancel" class="btn btn-secondary">Cancel</button>
+          <button id="preset-edit-save"   class="btn btn-primary">Save Preset</button>
+        </div>
       </div>
     </div>
   </div>

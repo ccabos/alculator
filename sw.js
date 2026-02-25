@@ -6,7 +6,7 @@
  * install the new worker, re-cache everything, then delete the old cache.
  */
 
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const CACHE_NAME    = `alculator-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -28,6 +28,7 @@ const PRECACHE_URLS = [
   './ui/chart.js',
   './ui/display.js',
   './ui/form.js',
+  './images/icon.svg',
   './images/icon-192.png',
   './images/icon-512.png',
 ];
