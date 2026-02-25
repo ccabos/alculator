@@ -158,8 +158,8 @@ export function renderChart(series, drinks, food_events, now_min) {
   }
 
   // Drink tick marks + duration triangles on time axis
-  const TRI_TOP = MT + PH + 10;  // top edge of triangle band
-  const TRI_BOT = MT + PH + 22;  // bottom edge of triangle band
+  const TRI_TOP = MT + PH + 13;  // top edge of triangle band
+  const TRI_BOT = MT + PH + 19;  // bottom edge of triangle band
   const TRI_MID = (TRI_TOP + TRI_BOT) / 2;
 
   for (const d of drinks) {
