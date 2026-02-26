@@ -109,8 +109,9 @@ const MEAL_LABELS = {
  * @param {Function} onDeleteFood  — callback(index)
  * @param {Function} onEditDrink   — callback(index)
  * @param {Function} onEditFood    — callback(index)
+ * @param {Function} [onGestureDrink] — callback(index, deltaTimeMins, deltaDurationMins)
  */
-export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, onDeleteFood, onEditDrink, onEditFood) {
+export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, onDeleteFood, onEditDrink, onEditFood, onGestureDrink) {
   const container = document.getElementById('log-entries');
 
   if (drinks.length === 0 && food_events.length === 0) {
@@ -133,15 +134,12 @@ export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, on
       const d = ev.data;
       const preset = d.preset_id ? presetMap[d.preset_id] : null;
       const name = preset ? preset.name : 'Custom drink';
-      const meta = [
-        `${d.volume_ml} mL`,
-        `${d.abv_pct} % ABV`,
-        d.duration_min ? `${d.duration_min} min` : null,
-        d.carbonated  ? 'carbonated' : null,
-        d.with_food   ? 'with food'  : null,
-      ].filter(Boolean).join(' · ');
+      const meta = _buildDrinkMeta(d.volume_ml, d.abv_pct, d.duration_min, d.carbonated, d.with_food);
 
       return `<div class="log-entry log-entry-drink" data-kind="drink" data-index="${ev.index}"
+              data-orig-time-min="${d.time_min}" data-orig-duration-min="${d.duration_min ?? 0}"
+              data-volume-ml="${d.volume_ml}" data-abv-pct="${d.abv_pct}"
+              data-carbonated="${d.carbonated}" data-with-food="${d.with_food}"
               role="button" tabindex="0" aria-label="Edit ${esc(name)}">
         <span class="log-entry-icon" aria-hidden="true">${drinkIcon(d.preset_id)}</span>
         <div class="log-entry-main">
@@ -175,8 +173,10 @@ export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, on
 
   container.innerHTML = html;
 
-  // Clicking anywhere on the entry row opens the edit panel;
-  // clicks on the delete button are handled by the button itself.
+  // Drink rows: gesture-aware handler (tap = edit, drag = adjust time/duration)
+  _bindDrinkRows(container, onEditDrink, onGestureDrink);
+
+  // Food rows: click/keyboard to edit
   function _bindRowEdit(selector, onEdit) {
     container.querySelectorAll(selector).forEach(row => {
       const handler = e => {
@@ -189,8 +189,7 @@ export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, on
       });
     });
   }
-  _bindRowEdit('.log-entry-drink', onEditDrink);
-  _bindRowEdit('.log-entry-food',  onEditFood);
+  _bindRowEdit('.log-entry-food', onEditFood);
 
   // Bind delete buttons
   container.querySelectorAll('.delete-drink-btn').forEach(btn => {
@@ -205,6 +204,149 @@ export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, on
       onDeleteFood(Number(btn.dataset.index));
     });
   });
+}
+
+// ─── Drink gesture handler ────────────────────────────────────────────────────
+
+/** Pixels of pointer travel that equal 1 minute of time or duration change. */
+const PX_PER_MIN = 3;
+
+/** Minimum pointer travel (px) to begin a drag gesture. */
+const DRAG_THRESHOLD = 8;
+
+/**
+ * Bind pointer-based tap/drag interaction to all drink log entries.
+ *
+ * A short press with minimal movement is treated as a tap → opens edit panel.
+ * Pressing and dragging horizontally adjusts `time_min` (start time).
+ * Pressing and dragging vertically adjusts `duration_min` (drinking duration).
+ *
+ * @param {HTMLElement} container
+ * @param {Function} onEditDrink     — callback(index)
+ * @param {Function} [onGestureDrink] — callback(index, deltaTimeMins, deltaDurationMins)
+ */
+function _bindDrinkRows(container, onEditDrink, onGestureDrink) {
+  container.querySelectorAll('.log-entry-drink').forEach(row => {
+    const index = Number(row.dataset.index);
+
+    let startX = 0, startY = 0;
+    let axisLocked = null;   // 'x' | 'y' | null
+    let didDrag = false;
+    let activePointerId = null;
+
+    function reset() {
+      axisLocked = null;
+      didDrag = false;
+      activePointerId = null;
+      row.classList.remove('log-entry-dragging', 'log-entry-drag-x', 'log-entry-drag-y');
+    }
+
+    row.addEventListener('pointerdown', e => {
+      if (e.target.closest('.log-action-btn')) return;
+      startX = e.clientX;
+      startY = e.clientY;
+      axisLocked = null;
+      didDrag = false;
+      activePointerId = e.pointerId;
+      row.setPointerCapture(e.pointerId);
+    });
+
+    row.addEventListener('pointermove', e => {
+      if (activePointerId !== e.pointerId) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+
+      if (!axisLocked && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+        axisLocked = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y';
+        didDrag = true;
+        row.classList.add('log-entry-dragging',
+          axisLocked === 'x' ? 'log-entry-drag-x' : 'log-entry-drag-y');
+      }
+
+      if (axisLocked) {
+        e.preventDefault(); // prevent scroll while gesture is active
+        const dtTime = axisLocked === 'x' ? Math.round(dx / PX_PER_MIN) : 0;
+        const dtDur  = axisLocked === 'y' ? -Math.round(dy / PX_PER_MIN) : 0;
+        _updateDrinkRowFeedback(row, dtTime, dtDur);
+      }
+    });
+
+    row.addEventListener('pointerup', e => {
+      if (activePointerId !== e.pointerId) return;
+      if (didDrag && axisLocked) {
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        const dtTime = axisLocked === 'x' ? Math.round(dx / PX_PER_MIN) : 0;
+        const dtDur  = axisLocked === 'y' ? -Math.round(dy / PX_PER_MIN) : 0;
+        if (onGestureDrink) onGestureDrink(index, dtTime, dtDur);
+      } else if (!didDrag) {
+        // Tap: open edit panel
+        onEditDrink(index);
+      }
+      reset();
+    });
+
+    row.addEventListener('pointercancel', e => {
+      if (activePointerId !== e.pointerId) return;
+      // Restore original display values
+      _updateDrinkRowFeedback(row, 0, 0);
+      reset();
+    });
+
+    // Keyboard: Enter/Space opens edit
+    row.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEditDrink(index); }
+    });
+  });
+}
+
+/**
+ * Rebuild the drink meta string from raw fields (matches the log HTML).
+ */
+function _buildDrinkMeta(volume_ml, abv_pct, duration_min, carbonated, with_food) {
+  return [
+    `${volume_ml} mL`,
+    `${abv_pct} % ABV`,
+    duration_min ? `${duration_min} min` : null,
+    carbonated   ? 'carbonated' : null,
+    with_food    ? 'with food'  : null,
+  ].filter(Boolean).join(' · ');
+}
+
+/**
+ * Update the time label and meta text of a drink row during a drag gesture
+ * to give live visual feedback.  Uses data-* attributes stored on the row.
+ *
+ * @param {HTMLElement} row
+ * @param {number} dtTime — delta minutes for time_min (may be 0)
+ * @param {number} dtDur  — delta minutes for duration_min (may be 0)
+ */
+function _updateDrinkRowFeedback(row, dtTime, dtDur) {
+  const origTime = Number(row.dataset.origTimeMins);
+  const origDur  = Number(row.dataset.origDurationMins);
+
+  // origTime may be normalized (> 1440 for after-midnight drinks);
+  // reduce to clock-minutes before applying the delta so clamping is correct.
+  const clockTime = origTime % 1440;
+  const newTime = Math.min(1439, Math.max(0, clockTime + dtTime));
+  const newDur  = Math.max(0, Math.min(180, origDur + dtDur));
+
+  const timeEl = row.querySelector('.log-entry-time');
+  const metaEl = row.querySelector('.log-entry-meta');
+
+  if (timeEl) {
+    timeEl.textContent = fmtTime(newTime);
+    timeEl.classList.toggle('log-entry-feedback-active', dtTime !== 0);
+  }
+
+  if (metaEl) {
+    const volume_ml  = Number(row.dataset.volumeMl);
+    const abv_pct    = Number(row.dataset.abvPct);
+    const carbonated = row.dataset.carbonated === 'true';
+    const with_food  = row.dataset.withFood   === 'true';
+    metaEl.textContent = _buildDrinkMeta(volume_ml, abv_pct, newDur, carbonated, with_food);
+    metaEl.classList.toggle('log-entry-feedback-active', dtDur !== 0);
+  }
 }
 
 // ─── Drink icon ───────────────────────────────────────────────────────────────

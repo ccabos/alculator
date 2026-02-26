@@ -164,7 +164,7 @@ function redraw() {
   document.getElementById('bac-display').style.opacity = profileComplete ? '1' : '0.3';
 
   if (!profileComplete) {
-    renderSessionLog(drinks, food_events, presets, _deleteDrink, _deleteFood, _editDrink, _editFood);
+    renderSessionLog(drinks, food_events, presets, _deleteDrink, _deleteFood, _editDrink, _editFood, _gestureDrink);
     return;
   }
 
@@ -205,7 +205,7 @@ function redraw() {
   renderBACDisplay(bac_now, bounds);
   renderSoberTime(sober_t);
   renderChart(extended, nDrinks, nFood, now_min);
-  renderSessionLog(nDrinks, nFood, presets, _deleteDrink, _deleteFood, _editDrink, _editFood);
+  renderSessionLog(nDrinks, nFood, presets, _deleteDrink, _deleteFood, _editDrink, _editFood, _gestureDrink);
 }
 
 // ─── Delete handlers ──────────────────────────────────────────────────────────
@@ -218,6 +218,29 @@ function _deleteDrink(index) {
 
 function _deleteFood(index) {
   session = { ...session, food_events: session.food_events.filter((_, i) => i !== index) };
+  saveSession(session);
+  redraw();
+}
+
+// ─── Gesture handler ───────────────────────────────────────────────────────────
+
+/**
+ * Apply a drag-gesture delta to a drink's start time and/or drinking duration.
+ *
+ * @param {number} index         — index into session.drinks
+ * @param {number} dtTimeMins    — minutes to add to time_min (negative = earlier)
+ * @param {number} dtDurMins     — minutes to add to duration_min (negative = shorter)
+ */
+function _gestureDrink(index, dtTimeMins, dtDurMins) {
+  const drink = session.drinks[index];
+  if (!drink) return;
+  const updated = {
+    ...drink,
+    time_min:     Math.min(1439, Math.max(0, drink.time_min     + dtTimeMins)),
+    duration_min: Math.max(0,    Math.min(180, (drink.duration_min ?? 0) + dtDurMins)),
+  };
+  const drinks = session.drinks.map((d, i) => i === index ? updated : d);
+  session = { ...session, drinks };
   saveSession(session);
   redraw();
 }
