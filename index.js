@@ -141,6 +141,9 @@ async function boot() {
     e.target.value = ''; // allow re-import of same file
   });
 
+  // GitHub Gist import
+  document.getElementById('gist-import-btn').addEventListener('click', _importFromGist);
+
   // 4. Listen for session changes (from any panel save)
   window.addEventListener('alculator:session-changed', () => redraw());
 
@@ -253,6 +256,80 @@ function _editDrink(index) {
 
 function _editFood(index) {
   openFoodPanelForEdit(session.food_events[index], index);
+}
+
+// ─── GitHub Gist import ────────────────────────────────────────────────────────
+
+/**
+ * Prompt the user for a GitHub Gist URL or ID, fetch the Gist via the
+ * GitHub REST API, find the first JSON file inside it, and import the
+ * session using the existing importJSON validator.
+ *
+ * Public Gists can be fetched without authentication (60 req/h per IP).
+ */
+async function _importFromGist() {
+  const input = window.prompt('Paste a GitHub Gist URL or Gist ID:');
+  if (!input) return;
+
+  // Accept full URLs like https://gist.github.com/user/ID or bare IDs
+  const match = input.trim().match(/([0-9a-f]{20,}|[0-9a-f]{32})$/i)
+             ?? input.trim().match(/([^/]+)$/);
+  const gistId = match?.[1];
+  if (!gistId) {
+    alert('Could not parse a Gist ID from that input.');
+    return;
+  }
+
+  let gist;
+  try {
+    const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+      headers: { Accept: 'application/vnd.github+json' },
+    });
+    if (!res.ok) {
+      alert(`GitHub API error ${res.status}: ${res.statusText}`);
+      return;
+    }
+    gist = await res.json();
+  } catch (err) {
+    alert(`Network error: ${err.message}`);
+    return;
+  }
+
+  // Find the first JSON file in the Gist
+  const files = Object.values(gist.files ?? {});
+  const jsonFile = files.find(f => f.filename?.endsWith('.json'));
+  if (!jsonFile) {
+    alert('No .json file found in that Gist.');
+    return;
+  }
+
+  // Gist API returns content inline for files ≤ 1 MB; fetch raw URL otherwise
+  let content = jsonFile.content;
+  if (!content && jsonFile.raw_url) {
+    try {
+      const raw = await fetch(jsonFile.raw_url);
+      content = await raw.text();
+    } catch (err) {
+      alert(`Could not fetch Gist file: ${err.message}`);
+      return;
+    }
+  }
+
+  try {
+    const imported = importJSON(content);
+    const replaceProfile = window.confirm(
+      `Import session from Gist "${jsonFile.filename}"?\nYour current profile will be replaced.`
+    );
+    if (!replaceProfile) {
+      imported.profile = session.profile;
+    }
+    session = imported;
+    saveSession(session);
+    populateProfilePanel(session.profile);
+    redraw();
+  } catch (err) {
+    alert(`Import failed: ${err.message}`);
+  }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
