@@ -38,18 +38,15 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Prepare site directory
+        run: |
+          mkdir _site
+          cp -r index.html index.js style.css manifest.json sw.js images model store io ui _site/
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
-          exclude: |
-            tests/
-            node_modules/
-            coverage/
-            scripts/
-            *.md
-            vitest.config.js
-            package*.json
+          path: _site
 
       - name: Deploy to GitHub Pages
         id: deployment
