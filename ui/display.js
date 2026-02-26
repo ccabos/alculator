@@ -243,6 +243,7 @@ function _bindDrinkRows(container, onEditDrink, onGestureDrink) {
 
     row.addEventListener('pointerdown', e => {
       if (e.target.closest('.log-action-btn')) return;
+      e.preventDefault(); // suppress text-selection on desktop browsers
       startX = e.clientX;
       startY = e.clientY;
       axisLocked = null;
