@@ -216,6 +216,23 @@ body {
 .log-entry-meta  { color: var(--c-muted); font-size: 0.8rem; }
 .log-entry-time  { color: var(--c-muted); font-size: 0.8rem; flex-shrink: 0; }
 .log-entry-actions { display: flex; gap: 0.25rem; flex-shrink: 0; }
+
+/* Drink row drag-gesture states */
+.log-entry-dragging {
+  background: var(--c-border);
+  box-shadow: var(--shadow);
+  position: relative;
+  z-index: 1;
+  user-select: none;
+}
+.log-entry-drag-x { cursor: ew-resize; }
+.log-entry-drag-y { cursor: ns-resize; }
+.log-entry-time.log-entry-feedback-active,
+.log-entry-meta.log-entry-feedback-active {
+  color: var(--c-primary);
+  font-weight: 600;
+  transition: color 0.1s;
+}
 .log-action-btn {
   background: none;
   border: 1px solid var(--c-border);
