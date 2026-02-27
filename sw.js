@@ -6,7 +6,7 @@
  * install the new worker, re-cache everything, then delete the old cache.
  */
 
-const CACHE_VERSION = 'v5';
+const CACHE_VERSION = 'v6';
 const CACHE_NAME    = `alculator-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [

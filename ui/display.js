@@ -323,8 +323,8 @@ function _buildDrinkMeta(volume_ml, abv_pct, duration_min, carbonated, with_food
  * @param {number} dtDur  — delta minutes for duration_min (may be 0)
  */
 function _updateDrinkRowFeedback(row, dtTime, dtDur) {
-  const origTime = Number(row.dataset.origTimeMins);
-  const origDur  = Number(row.dataset.origDurationMins);
+  const origTime = Number(row.dataset.origTimeMin);
+  const origDur  = Number(row.dataset.origDurationMin);
 
   // origTime may be normalized (> 1440 for after-midnight drinks);
   // reduce to clock-minutes before applying the delta so clamping is correct.
