@@ -205,7 +205,7 @@ function redraw() {
   renderBACDisplay(bac_now, bounds);
   renderSoberTime(sober_t);
   renderChart(extended, nDrinks, nFood, now_min);
-  renderSessionLog(nDrinks, nFood, presets, _deleteDrink, _deleteFood, _editDrink, _editFood, _gestureDrink);
+  renderSessionLog(nDrinks, nFood, presets, _deleteDrink, _deleteFood, _editDrink, _editFood, _gestureDrink, _liveChartUpdate);
 }
 
 // ─── Delete handlers ──────────────────────────────────────────────────────────
@@ -243,6 +243,56 @@ function _gestureDrink(index, dtTimeMins, dtDurMins) {
   session = { ...session, drinks };
   saveSession(session);
   redraw();
+}
+
+// ─── Live chart update during drag ────────────────────────────────────────────
+
+/**
+ * Re-render only the BAC chart (and header readout) with a hypothetical drink
+ * position, without touching the session log so the ongoing drag state is
+ * preserved.  Called by the gesture handler once per integer-minute change.
+ *
+ * @param {number} index      — index into session.drinks
+ * @param {number} dtTimeMins — tentative delta for time_min
+ * @param {number} dtDurMins  — tentative delta for duration_min
+ */
+function _liveChartUpdate(index, dtTimeMins, dtDurMins) {
+  const { profile, food_events } = session;
+  if (!profile?.sex || !profile?.weight_kg || !profile?.age) return; // no chart without profile
+
+  const drink = session.drinks[index];
+  if (!drink) return;
+
+  const tempDrink = {
+    ...drink,
+    time_min:     Math.min(1439, Math.max(0, drink.time_min     + dtTimeMins)),
+    duration_min: Math.max(0,    Math.min(180, (drink.duration_min ?? 0) + dtDurMins)),
+  };
+  const tempDrinks = session.drinks.map((d, i) => i === index ? tempDrink : d);
+
+  const { drinks: nDrinks, food_events: nFood, now_min } =
+    _normalizeTimes(tempDrinks, food_events, _nowMin());
+
+  const all_t   = [now_min, ...nDrinks.map(d => d.time_min), ...nFood.map(f => f.time_min)];
+  const t_start = Math.min(...all_t) - 30;
+  const t_end   = now_min + 120;
+
+  const series  = bacSeries(nDrinks, nFood, profile, t_start, t_end);
+  const now_idx = series.findIndex(p => p.t_min >= now_min) ?? series.length - 1;
+  const bac_now = series[Math.max(0, now_idx)]?.bac_pct ?? 0;
+  const bounds  = uncertaintyBounds(bac_now);
+
+  let sober_t = findSoberTime(series);
+  let extended = series;
+  if (sober_t !== null && sober_t > t_end) {
+    extended = bacSeries(nDrinks, nFood, profile, t_start, sober_t + 360);
+    sober_t  = findSoberTime(extended);
+    if (sober_t !== null && sober_t > extended[extended.length - 1].t_min) sober_t = null;
+  }
+
+  renderBACDisplay(bac_now, bounds);
+  renderSoberTime(sober_t);
+  renderChart(extended, nDrinks, nFood, now_min);
 }
 
 // ─── Edit handlers ─────────────────────────────────────────────────────────────

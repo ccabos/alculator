@@ -109,9 +109,10 @@ const MEAL_LABELS = {
  * @param {Function} onDeleteFood  — callback(index)
  * @param {Function} onEditDrink   — callback(index)
  * @param {Function} onEditFood    — callback(index)
- * @param {Function} [onGestureDrink] — callback(index, deltaTimeMins, deltaDurationMins)
+ * @param {Function} [onGestureDrink]  — callback(index, deltaTimeMins, deltaDurationMins)
+ * @param {Function} [onChartUpdate]  — callback(index, deltaTimeMins, deltaDurationMins); fired on each integer-minute change during drag
  */
-export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, onDeleteFood, onEditDrink, onEditFood, onGestureDrink) {
+export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, onDeleteFood, onEditDrink, onEditFood, onGestureDrink, onChartUpdate) {
   const container = document.getElementById('log-entries');
 
   if (drinks.length === 0 && food_events.length === 0) {
@@ -174,7 +175,7 @@ export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, on
   container.innerHTML = html;
 
   // Drink rows: gesture-aware handler (tap = edit, drag = adjust time/duration)
-  _bindDrinkRows(container, onEditDrink, onGestureDrink);
+  _bindDrinkRows(container, onEditDrink, onGestureDrink, onChartUpdate);
 
   // Food rows: click/keyboard to edit
   function _bindRowEdit(selector, onEdit) {
@@ -225,7 +226,7 @@ const DRAG_THRESHOLD = 8;
  * @param {Function} onEditDrink     — callback(index)
  * @param {Function} [onGestureDrink] — callback(index, deltaTimeMins, deltaDurationMins)
  */
-function _bindDrinkRows(container, onEditDrink, onGestureDrink) {
+function _bindDrinkRows(container, onEditDrink, onGestureDrink, onChartUpdate) {
   container.querySelectorAll('.log-entry-drink').forEach(row => {
     const index = Number(row.dataset.index);
 
@@ -233,11 +234,14 @@ function _bindDrinkRows(container, onEditDrink, onGestureDrink) {
     let axisLocked = null;   // 'x' | 'y' | null
     let didDrag = false;
     let activePointerId = null;
+    let lastDtTime = 0, lastDtDur = 0; // last integer-minute deltas sent to chart
 
     function reset() {
       axisLocked = null;
       didDrag = false;
       activePointerId = null;
+      lastDtTime = 0;
+      lastDtDur = 0;
       row.classList.remove('log-entry-dragging', 'log-entry-drag-x', 'log-entry-drag-y');
     }
 
@@ -269,6 +273,12 @@ function _bindDrinkRows(container, onEditDrink, onGestureDrink) {
         const dtTime = axisLocked === 'x' ? Math.round(dx / PX_PER_MIN) : 0;
         const dtDur  = axisLocked === 'y' ? -Math.round(dy / PX_PER_MIN) : 0;
         _updateDrinkRowFeedback(row, dtTime, dtDur);
+        // Only redraw the chart when the integer-minute value changes
+        if (onChartUpdate && (dtTime !== lastDtTime || dtDur !== lastDtDur)) {
+          lastDtTime = dtTime;
+          lastDtDur  = dtDur;
+          onChartUpdate(index, dtTime, dtDur);
+        }
       }
     });
 
@@ -289,8 +299,9 @@ function _bindDrinkRows(container, onEditDrink, onGestureDrink) {
 
     row.addEventListener('pointercancel', e => {
       if (activePointerId !== e.pointerId) return;
-      // Restore original display values
+      // Restore original display values and chart
       _updateDrinkRowFeedback(row, 0, 0);
+      if (onChartUpdate) onChartUpdate(index, 0, 0);
       reset();
     });
 
