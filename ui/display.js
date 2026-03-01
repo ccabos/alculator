@@ -246,8 +246,10 @@ const DRAG_THRESHOLD   = 8;
  *   • pointercancel (browser takes over for scroll) → clears timer, restores chart
  *
  * touch-action: pan-y on the row (set via CSS) allows normal vertical page-scroll
- * before the hold completes.  Once the hold fires and setPointerCapture is called,
- * all subsequent events are directed to the row.
+ * before the hold completes.  Once the hold fires, touch-action is switched to
+ * none so the browser can no longer fire pointercancel for vertical movement,
+ * enabling both vertical duration drags and diagonal deviations from a locked
+ * horizontal axis without the gesture being cancelled.
  *
  * @param {HTMLElement} row
  * @param {{ allowVertical: boolean, onTap: Function, onGesture: Function,
@@ -266,12 +268,19 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
   const activateGesture = () => {
     if (activePointerId == null) return;
     gestureReady = true;
+    // Switch to touch-action:none so the browser can no longer intercept
+    // vertical movement for scrolling.  The CSS sets pan-y (allowing page
+    // scroll before the hold completes); we override it here so that both
+    // vertical duration drags and diagonal deviations during a horizontal
+    // drag no longer fire pointercancel.
+    row.style.touchAction = 'none';
     row.setPointerCapture(activePointerId);
     row.classList.add('log-entry-held');
     navigator.vibrate?.(15);
   };
 
   const reset = () => {
+    row.style.touchAction = ''; // restore CSS pan-y
     clearTimeout(longPressTimer);
     longPressTimer  = null;
     axisLocked      = null;
