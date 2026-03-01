@@ -234,13 +234,20 @@ body {
   transition: color 0.1s;
 }
 
-/* Prevent the browser from intercepting touch/pointer on drink rows so the
-   custom drag gesture receives all pointer events without triggering scroll
-   or text-selection. */
-.log-entry-drink {
-  touch-action: none;
+/* Allow vertical page-scroll through log entries before long-press activates.
+   Once the 300 ms hold fires and setPointerCapture is called, the gesture
+   handler takes full control via e.preventDefault() in pointermove. */
+.log-entry-drink,
+.log-entry-food {
+  touch-action: pan-y;
   -webkit-user-select: none;
   user-select: none;
+}
+
+/* Visual indicator shown while the long-press hold is active */
+.log-entry-held {
+  background: var(--c-border);
+  box-shadow: 0 0 0 2px var(--c-primary);
 }
 
 .log-action-btn {
