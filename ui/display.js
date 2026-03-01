@@ -242,8 +242,12 @@ function _hideGestureOverlay() {
 
 /** ms the pointer must be held still before drag mode activates. */
 const LONG_PRESS_MS    = 300;
-/** px of movement during the hold that cancels the gesture (scroll intent). */
+/** px of horizontal movement before the hold that cancels the long-press. */
 const ABORT_THRESHOLD  = 10;
+/** px of vertical movement before the hold that enters scroll mode.
+ *  Kept small to minimise the frozen dead-zone while touch-action:none is
+ *  active; full accumulated movement is compensated on scroll-mode entry. */
+const SCROLL_THRESHOLD = 4;
 /** px of drag travel after activation that equals 1 minute of change. */
 const PX_PER_MIN       = 3;
 /** px of movement after activation before the axis is locked. */
@@ -281,9 +285,14 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
   let lastDtDur       = 0;
   let scrollMode      = false;  // true when pre-hold vertical swipe detected
   let lastScrollY     = 0;      // tracks incremental scroll steps
+  let currentY        = 0;      // latest pointer Y for activateGesture guard
 
   const activateGesture = () => {
     if (activePointerId == null || scrollMode) return;
+    // Bail if the pointer has drifted vertically — user is likely scrolling and
+    // the timer fired before SCROLL_THRESHOLD was reached.  Prevents the
+    // log-entry-held highlight from flickering on during a slow scroll.
+    if (Math.abs(currentY - startY) > 1) return;
     gestureReady = true;
     row.setPointerCapture(activePointerId);
     row.classList.add('log-entry-held');
@@ -305,6 +314,7 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
     lastDtDur       = 0;
     scrollMode      = false;
     lastScrollY     = 0;
+    currentY        = 0;
     row.classList.remove('log-entry-held', 'log-entry-dragging', 'log-entry-drag-x', 'log-entry-drag-y');
     _hideGestureOverlay();
   };
@@ -320,6 +330,7 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
     lastDtDur       = 0;
     scrollMode      = false;
     lastScrollY     = e.clientY;
+    currentY        = e.clientY;
     activePointerId = e.pointerId;
     longPressTimer  = setTimeout(activateGesture, LONG_PRESS_MS);
   });
@@ -330,25 +341,29 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
     const dy = e.clientY - startY;
 
     if (!gestureReady) {
-      // Track incremental vertical step for manual page-scroll simulation
+      currentY = e.clientY;
       const stepY = e.clientY - lastScrollY;
       lastScrollY = e.clientY;
 
       if (scrollMode) {
-        // Already in scroll mode — continue scrolling the page
         window.scrollBy(0, -stepY);
         return;
       }
-      if (Math.abs(dy) > ABORT_THRESHOLD) {
-        // Vertical intent before hold → enter scroll mode, cancel long-press
+
+      const adx = Math.abs(dx);
+      const ady = Math.abs(dy);
+
+      if (ady > SCROLL_THRESHOLD && ady > adx) {
+        // Vertical intent → enter scroll mode and compensate for the entire
+        // frozen period (not just the last step) to eliminate the dead-zone jump.
         clearTimeout(longPressTimer);
         longPressTimer = null;
         scrollMode = true;
-        window.scrollBy(0, -stepY);
+        window.scrollBy(0, -dy);
         return;
       }
-      if (Math.abs(dx) > ABORT_THRESHOLD) {
-        // Horizontal movement before hold → cancel long-press (not a tap, not a gesture)
+      if (adx > ABORT_THRESHOLD) {
+        // Horizontal movement → cancel long-press (not a tap, not a gesture)
         clearTimeout(longPressTimer);
         longPressTimer  = null;
         activePointerId = null;
