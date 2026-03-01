@@ -164,7 +164,7 @@ function redraw() {
   document.getElementById('bac-display').style.opacity = profileComplete ? '1' : '0.3';
 
   if (!profileComplete) {
-    renderSessionLog(drinks, food_events, presets, _deleteDrink, _deleteFood, _editDrink, _editFood, _gestureDrink);
+    renderSessionLog(drinks, food_events, presets, _deleteDrink, _deleteFood, _editDrink, _editFood, _gestureDrink, _liveChartUpdate, _gestureFood, _liveFoodChartUpdate);
     return;
   }
 
@@ -205,7 +205,7 @@ function redraw() {
   renderBACDisplay(bac_now, bounds);
   renderSoberTime(sober_t);
   renderChart(extended, nDrinks, nFood, now_min);
-  renderSessionLog(nDrinks, nFood, presets, _deleteDrink, _deleteFood, _editDrink, _editFood, _gestureDrink, _liveChartUpdate);
+  renderSessionLog(nDrinks, nFood, presets, _deleteDrink, _deleteFood, _editDrink, _editFood, _gestureDrink, _liveChartUpdate, _gestureFood, _liveFoodChartUpdate);
 }
 
 // ─── Delete handlers ──────────────────────────────────────────────────────────
@@ -236,14 +236,27 @@ function _gestureDrink(index, dtTimeMins, dtDurMins) {
   if (!drink) return;
   const updated = {
     ...drink,
-    time_min:     Math.min(1439, Math.max(0, drink.time_min     + dtTimeMins)),
-    duration_min: Math.max(0,    Math.min(180, (drink.duration_min ?? 0) + dtDurMins)),
+    time_min:     _wrapMin(drink.time_min     + dtTimeMins),
+    duration_min: Math.max(0, Math.min(180, (drink.duration_min ?? 0) + dtDurMins)),
   };
   const drinks = session.drinks.map((d, i) => i === index ? updated : d);
   session = { ...session, drinks };
   saveSession(session);
   redraw();
 }
+
+function _gestureFood(index, dtTimeMins) {
+  const food = session.food_events[index];
+  if (!food) return;
+  const updated = { ...food, time_min: _wrapMin(food.time_min + dtTimeMins) };
+  const food_events = session.food_events.map((f, i) => i === index ? updated : f);
+  session = { ...session, food_events };
+  saveSession(session);
+  redraw();
+}
+
+/** Wrap absolute minutes into the 0–1439 clock range. */
+function _wrapMin(t) { return ((t % 1440) + 1440) % 1440; }
 
 // ─── Live chart update during drag ────────────────────────────────────────────
 
@@ -265,8 +278,8 @@ function _liveChartUpdate(index, dtTimeMins, dtDurMins) {
 
   const tempDrink = {
     ...drink,
-    time_min:     Math.min(1439, Math.max(0, drink.time_min     + dtTimeMins)),
-    duration_min: Math.max(0,    Math.min(180, (drink.duration_min ?? 0) + dtDurMins)),
+    time_min:     _wrapMin(drink.time_min + dtTimeMins),
+    duration_min: Math.max(0, Math.min(180, (drink.duration_min ?? 0) + dtDurMins)),
   };
   const tempDrinks = session.drinks.map((d, i) => i === index ? tempDrink : d);
 
@@ -282,6 +295,38 @@ function _liveChartUpdate(index, dtTimeMins, dtDurMins) {
   const bac_now = series[Math.max(0, now_idx)]?.bac_pct ?? 0;
   const bounds  = uncertaintyBounds(bac_now);
 
+  let sober_t = findSoberTime(series);
+  let extended = series;
+  if (sober_t !== null && sober_t > t_end) {
+    extended = bacSeries(nDrinks, nFood, profile, t_start, sober_t + 360);
+    sober_t  = findSoberTime(extended);
+    if (sober_t !== null && sober_t > extended[extended.length - 1].t_min) sober_t = null;
+  }
+
+  renderBACDisplay(bac_now, bounds);
+  renderSoberTime(sober_t);
+  renderChart(extended, nDrinks, nFood, now_min);
+}
+
+function _liveFoodChartUpdate(index, dtTimeMins) {
+  const { profile, drinks } = session;
+  if (!profile?.sex || !profile?.weight_kg || !profile?.age) return;
+  const food = session.food_events[index];
+  if (!food) return;
+
+  const tempFood = { ...food, time_min: _wrapMin(food.time_min + dtTimeMins) };
+  const tempFoodEvents = session.food_events.map((f, i) => i === index ? tempFood : f);
+
+  const { drinks: nDrinks, food_events: nFood, now_min } =
+    _normalizeTimes(drinks, tempFoodEvents, _nowMin());
+  const all_t   = [now_min, ...nDrinks.map(d => d.time_min), ...nFood.map(f => f.time_min)];
+  const t_start = Math.min(...all_t) - 30;
+  const t_end   = now_min + 120;
+
+  const series  = bacSeries(nDrinks, nFood, profile, t_start, t_end);
+  const now_idx = series.findIndex(p => p.t_min >= now_min) ?? series.length - 1;
+  const bac_now = series[Math.max(0, now_idx)]?.bac_pct ?? 0;
+  const bounds  = uncertaintyBounds(bac_now);
   let sober_t = findSoberTime(series);
   let extended = series;
   if (sober_t !== null && sober_t > t_end) {

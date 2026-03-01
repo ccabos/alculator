@@ -65,8 +65,7 @@ export function renderBACDisplay(bac_pct, bounds) {
 /**
  * Render the "sober by" row.
  *
- * @param {number|null} t_min       — absolute minutes from midnight when sober, or null
- * @param {number}      session_start_min — session start (for context), unused currently
+ * @param {number|null} t_min — absolute minutes from midnight when sober, or null
  */
 export function renderSoberTime(t_min) {
   const el = document.getElementById('sober-time');
@@ -82,7 +81,7 @@ export function renderSoberTime(t_min) {
 // ─── Session log ──────────────────────────────────────────────────────────────
 
 /**
- * Format minutes-from-midnight as HH:MM.
+ * Format minutes-from-midnight as HH:MM, wrapping correctly past midnight.
  * @param {number} t_min
  * @returns {string}
  */
@@ -91,6 +90,9 @@ function fmtTime(t_min) {
   const m = Math.round(t_min) % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
+
+/** Wrap an absolute-minute value to the 0–1439 clock range. */
+function wrapTime(t) { return ((t % 1440) + 1440) % 1440; }
 
 const MEAL_LABELS = {
   snack:      'Snack',
@@ -104,15 +106,23 @@ const MEAL_LABELS = {
  *
  * @param {object[]} drinks
  * @param {object[]} food_events
- * @param {object[]} presets       — array of preset objects for name lookup
- * @param {Function} onDeleteDrink — callback(index)
- * @param {Function} onDeleteFood  — callback(index)
- * @param {Function} onEditDrink   — callback(index)
- * @param {Function} onEditFood    — callback(index)
- * @param {Function} [onGestureDrink]  — callback(index, deltaTimeMins, deltaDurationMins)
- * @param {Function} [onChartUpdate]  — callback(index, deltaTimeMins, deltaDurationMins); fired on each integer-minute change during drag
+ * @param {object[]} presets          — array of preset objects for name lookup
+ * @param {Function} onDeleteDrink    — callback(index)
+ * @param {Function} onDeleteFood     — callback(index)
+ * @param {Function} onEditDrink      — callback(index)
+ * @param {Function} onEditFood       — callback(index)
+ * @param {Function} [onGestureDrink] — callback(index, deltaTimeMins, deltaDurationMins)
+ * @param {Function} [onChartUpdate]  — callback(index, deltaTimeMins, deltaDurationMins)
+ * @param {Function} [onGestureFood]  — callback(index, deltaTimeMins)
+ * @param {Function} [onFoodChartUpdate] — callback(index, deltaTimeMins)
  */
-export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, onDeleteFood, onEditDrink, onEditFood, onGestureDrink, onChartUpdate) {
+export function renderSessionLog(
+  drinks, food_events, presets,
+  onDeleteDrink, onDeleteFood,
+  onEditDrink,   onEditFood,
+  onGestureDrink, onChartUpdate,
+  onGestureFood,  onFoodChartUpdate,
+) {
   const container = document.getElementById('log-entries');
 
   if (drinks.length === 0 && food_events.length === 0) {
@@ -122,7 +132,7 @@ export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, on
 
   // Build unified event list
   const events = [
-    ...drinks.map((d, i)     => ({ kind: 'drink', index: i, t: d.time_min, data: d })),
+    ...drinks.map((d, i)      => ({ kind: 'drink', index: i, t: d.time_min, data: d })),
     ...food_events.map((f, i) => ({ kind: 'food',  index: i, t: f.time_min, data: f })),
   ];
   // Sort descending (most recent first)
@@ -157,6 +167,7 @@ export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, on
       const f = ev.data;
       const label = MEAL_LABELS[f.type] ?? f.type;
       return `<div class="log-entry log-entry-food" data-kind="food" data-index="${ev.index}"
+              data-orig-time-min="${f.time_min}"
               role="button" tabindex="0" aria-label="Edit ${esc(label)}">
         <span class="log-entry-icon" aria-hidden="true">🍽</span>
         <div class="log-entry-main">
@@ -174,25 +185,31 @@ export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, on
 
   container.innerHTML = html;
 
-  // Drink rows: gesture-aware handler (tap = edit, drag = adjust time/duration)
-  _bindDrinkRows(container, onEditDrink, onGestureDrink, onChartUpdate);
-
-  // Food rows: click/keyboard to edit
-  function _bindRowEdit(selector, onEdit) {
-    container.querySelectorAll(selector).forEach(row => {
-      const handler = e => {
-        if (e.target.closest('.log-action-btn')) return;
-        onEdit(Number(row.dataset.index));
-      };
-      row.addEventListener('click', handler);
-      row.addEventListener('keydown', e => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(e); }
-      });
+  // Drink rows — tap opens edit, hold+drag adjusts time (h) or duration (v)
+  container.querySelectorAll('.log-entry-drink').forEach(row => {
+    const index = Number(row.dataset.index);
+    _bindGestureRow(row, {
+      allowVertical:  true,
+      onTap:          () => onEditDrink(index),
+      onGesture:      (dt, dd) => onGestureDrink?.(index, dt, dd),
+      onChartLive:    (dt, dd) => onChartUpdate?.(index, dt, dd),
+      updateFeedback: _updateDrinkRowFeedback,
     });
-  }
-  _bindRowEdit('.log-entry-food', onEditFood);
+  });
 
-  // Bind delete buttons
+  // Food rows — tap opens edit, hold+drag adjusts time (h only)
+  container.querySelectorAll('.log-entry-food').forEach(row => {
+    const index = Number(row.dataset.index);
+    _bindGestureRow(row, {
+      allowVertical:  false,
+      onTap:          () => onEditFood(index),
+      onGesture:      (dt) => onGestureFood?.(index, dt),
+      onChartLive:    (dt) => onFoodChartUpdate?.(index, dt),
+      updateFeedback: _updateFoodRowFeedback,
+    });
+  });
+
+  // Delete buttons
   container.querySelectorAll('.delete-drink-btn').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
@@ -207,110 +224,147 @@ export function renderSessionLog(drinks, food_events, presets, onDeleteDrink, on
   });
 }
 
-// ─── Drink gesture handler ────────────────────────────────────────────────────
+// ─── Shared gesture handler ────────────────────────────────────────────────────
 
-/** Pixels of pointer travel that equal 1 minute of time or duration change. */
-const PX_PER_MIN = 3;
-
-/** Minimum pointer travel (px) to begin a drag gesture. */
-const DRAG_THRESHOLD = 8;
+/** ms the pointer must be held still before drag mode activates. */
+const LONG_PRESS_MS    = 300;
+/** px of movement during the hold that cancels the gesture (scroll intent). */
+const ABORT_THRESHOLD  = 10;
+/** px of drag travel after activation that equals 1 minute of change. */
+const PX_PER_MIN       = 3;
+/** px of movement after activation before the axis is locked. */
+const DRAG_THRESHOLD   = 8;
 
 /**
- * Bind pointer-based tap/drag interaction to all drink log entries.
+ * Bind a unified long-press + drag gesture to a single log-entry row.
  *
- * A short press with minimal movement is treated as a tap → opens edit panel.
- * Pressing and dragging horizontally adjusts `time_min` (start time).
- * Pressing and dragging vertically adjusts `duration_min` (drinking duration).
+ * Interaction model:
+ *   • Short tap (< LONG_PRESS_MS, < ABORT_THRESHOLD movement) → onTap()
+ *   • Hold LONG_PRESS_MS without moving → gesture activates (haptic + visual)
+ *   • Horizontal drag after activation → onGesture(dtTime, 0), live onChartLive
+ *   • Vertical drag after activation (allowVertical) → onGesture(0, dtDur), live onChartLive
+ *   • pointercancel (browser takes over for scroll) → clears timer, restores chart
  *
- * @param {HTMLElement} container
- * @param {Function} onEditDrink     — callback(index)
- * @param {Function} [onGestureDrink] — callback(index, deltaTimeMins, deltaDurationMins)
+ * touch-action: pan-y on the row (set via CSS) allows normal vertical page-scroll
+ * before the hold completes.  Once the hold fires and setPointerCapture is called,
+ * all subsequent events are directed to the row.
+ *
+ * @param {HTMLElement} row
+ * @param {{ allowVertical: boolean, onTap: Function, onGesture: Function,
+ *           onChartLive: Function, updateFeedback: Function }} config
  */
-function _bindDrinkRows(container, onEditDrink, onGestureDrink, onChartUpdate) {
-  container.querySelectorAll('.log-entry-drink').forEach(row => {
-    const index = Number(row.dataset.index);
+function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, updateFeedback }) {
+  let startX = 0, startY = 0;
+  let axisLocked      = null;
+  let didDrag         = false;
+  let activePointerId = null;
+  let gestureReady    = false;
+  let longPressTimer  = null;
+  let lastDtTime      = 0;
+  let lastDtDur       = 0;
 
-    let startX = 0, startY = 0;
-    let axisLocked = null;   // 'x' | 'y' | null
-    let didDrag = false;
-    let activePointerId = null;
-    let lastDtTime = 0, lastDtDur = 0; // last integer-minute deltas sent to chart
+  const activateGesture = () => {
+    if (activePointerId == null) return;
+    gestureReady = true;
+    row.setPointerCapture(activePointerId);
+    row.classList.add('log-entry-held');
+    navigator.vibrate?.(15);
+  };
 
-    function reset() {
-      axisLocked = null;
-      didDrag = false;
-      activePointerId = null;
-      lastDtTime = 0;
-      lastDtDur = 0;
-      row.classList.remove('log-entry-dragging', 'log-entry-drag-x', 'log-entry-drag-y');
+  const reset = () => {
+    clearTimeout(longPressTimer);
+    longPressTimer  = null;
+    axisLocked      = null;
+    didDrag         = false;
+    activePointerId = null;
+    gestureReady    = false;
+    lastDtTime      = 0;
+    lastDtDur       = 0;
+    row.classList.remove('log-entry-held', 'log-entry-dragging', 'log-entry-drag-x', 'log-entry-drag-y');
+  };
+
+  row.addEventListener('pointerdown', e => {
+    if (e.target.closest('.log-action-btn')) return;
+    startX          = e.clientX;
+    startY          = e.clientY;
+    axisLocked      = null;
+    didDrag         = false;
+    gestureReady    = false;
+    lastDtTime      = 0;
+    lastDtDur       = 0;
+    activePointerId = e.pointerId;
+    longPressTimer  = setTimeout(activateGesture, LONG_PRESS_MS);
+  });
+
+  row.addEventListener('pointermove', e => {
+    if (activePointerId !== e.pointerId) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+
+    if (!gestureReady) {
+      // During hold: cancel if the pointer moved too far (user intends to scroll)
+      if (Math.abs(dx) > ABORT_THRESHOLD || Math.abs(dy) > ABORT_THRESHOLD) {
+        clearTimeout(longPressTimer);
+        longPressTimer  = null;
+        activePointerId = null;
+      }
+      return;
     }
 
-    row.addEventListener('pointerdown', e => {
-      if (e.target.closest('.log-action-btn')) return;
-      e.preventDefault(); // suppress text-selection on desktop browsers
-      startX = e.clientX;
-      startY = e.clientY;
-      axisLocked = null;
-      didDrag = false;
-      activePointerId = e.pointerId;
-      row.setPointerCapture(e.pointerId);
-    });
+    // Gesture active: lock axis on first significant movement
+    if (!axisLocked && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+      axisLocked = (allowVertical && Math.abs(dy) > Math.abs(dx)) ? 'y' : 'x';
+      didDrag    = true;
+      row.classList.add('log-entry-dragging',
+        axisLocked === 'x' ? 'log-entry-drag-x' : 'log-entry-drag-y');
+    }
 
-    row.addEventListener('pointermove', e => {
-      if (activePointerId !== e.pointerId) return;
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-
-      if (!axisLocked && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
-        axisLocked = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y';
-        didDrag = true;
-        row.classList.add('log-entry-dragging',
-          axisLocked === 'x' ? 'log-entry-drag-x' : 'log-entry-drag-y');
+    if (axisLocked) {
+      e.preventDefault(); // block scroll once axis is committed
+      const dtTime = axisLocked === 'x' ? Math.round(dx / PX_PER_MIN) : 0;
+      const dtDur  = axisLocked === 'y' ? -Math.round(dy / PX_PER_MIN) : 0;
+      updateFeedback(row, dtTime, dtDur);
+      if (onChartLive && (dtTime !== lastDtTime || dtDur !== lastDtDur)) {
+        lastDtTime = dtTime;
+        lastDtDur  = dtDur;
+        onChartLive(dtTime, dtDur);
       }
+    }
+  });
 
-      if (axisLocked) {
-        e.preventDefault(); // prevent scroll while gesture is active
-        const dtTime = axisLocked === 'x' ? Math.round(dx / PX_PER_MIN) : 0;
-        const dtDur  = axisLocked === 'y' ? -Math.round(dy / PX_PER_MIN) : 0;
-        _updateDrinkRowFeedback(row, dtTime, dtDur);
-        // Only redraw the chart when the integer-minute value changes
-        if (onChartUpdate && (dtTime !== lastDtTime || dtDur !== lastDtDur)) {
-          lastDtTime = dtTime;
-          lastDtDur  = dtDur;
-          onChartUpdate(index, dtTime, dtDur);
-        }
-      }
-    });
+  row.addEventListener('pointerup', e => {
+    if (activePointerId !== e.pointerId) return;
+    const wasReady = gestureReady;
+    const wasDrag  = didDrag && axisLocked;
+    const finalDx  = e.clientX - startX;
+    const finalDy  = e.clientY - startY;
+    const finalAxis = axisLocked;
+    reset();
 
-    row.addEventListener('pointerup', e => {
-      if (activePointerId !== e.pointerId) return;
-      if (didDrag && axisLocked) {
-        const dx = e.clientX - startX;
-        const dy = e.clientY - startY;
-        const dtTime = axisLocked === 'x' ? Math.round(dx / PX_PER_MIN) : 0;
-        const dtDur  = axisLocked === 'y' ? -Math.round(dy / PX_PER_MIN) : 0;
-        if (onGestureDrink) onGestureDrink(index, dtTime, dtDur);
-      } else if (!didDrag) {
-        // Tap: open edit panel
-        onEditDrink(index);
-      }
-      reset();
-    });
+    if (wasReady && wasDrag) {
+      const dtTime = finalAxis === 'x' ? Math.round(finalDx / PX_PER_MIN) : 0;
+      const dtDur  = finalAxis === 'y' ? -Math.round(finalDy / PX_PER_MIN) : 0;
+      onGesture?.(dtTime, dtDur);
+    } else {
+      // Short tap or hold-without-drag: open edit panel
+      onTap?.();
+    }
+  });
 
-    row.addEventListener('pointercancel', e => {
-      if (activePointerId !== e.pointerId) return;
-      // Restore original display values and chart
-      _updateDrinkRowFeedback(row, 0, 0);
-      if (onChartUpdate) onChartUpdate(index, 0, 0);
-      reset();
-    });
+  row.addEventListener('pointercancel', e => {
+    if (activePointerId !== e.pointerId) return;
+    // Browser took over (e.g. scroll); restore chart preview and clear state
+    updateFeedback(row, 0, 0);
+    if (onChartLive) onChartLive(0, 0);
+    reset();
+  });
 
-    // Keyboard: Enter/Space opens edit
-    row.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEditDrink(index); }
-    });
+  row.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onTap?.(); }
   });
 }
+
+// ─── Row feedback helpers ──────────────────────────────────────────────────────
 
 /**
  * Rebuild the drink meta string from raw fields (matches the log HTML).
@@ -326,21 +380,15 @@ function _buildDrinkMeta(volume_ml, abv_pct, duration_min, carbonated, with_food
 }
 
 /**
- * Update the time label and meta text of a drink row during a drag gesture
- * to give live visual feedback.  Uses data-* attributes stored on the row.
- *
- * @param {HTMLElement} row
- * @param {number} dtTime — delta minutes for time_min (may be 0)
- * @param {number} dtDur  — delta minutes for duration_min (may be 0)
+ * Update the time label and meta text of a drink row during drag.
+ * Time wraps around midnight; duration is clamped to [0, 180].
  */
 function _updateDrinkRowFeedback(row, dtTime, dtDur) {
   const origTime = Number(row.dataset.origTimeMin);
   const origDur  = Number(row.dataset.origDurationMin);
 
-  // origTime may be normalized (> 1440 for after-midnight drinks);
-  // reduce to clock-minutes before applying the delta so clamping is correct.
-  const clockTime = origTime % 1440;
-  const newTime = Math.min(1439, Math.max(0, clockTime + dtTime));
+  // origTime may be a normalized value (> 1440); reduce to clock range before wrapping.
+  const newTime = wrapTime(origTime % 1440 + dtTime);
   const newDur  = Math.max(0, Math.min(180, origDur + dtDur));
 
   const timeEl = row.querySelector('.log-entry-time');
@@ -350,7 +398,6 @@ function _updateDrinkRowFeedback(row, dtTime, dtDur) {
     timeEl.textContent = fmtTime(newTime);
     timeEl.classList.toggle('log-entry-feedback-active', dtTime !== 0);
   }
-
   if (metaEl) {
     const volume_ml  = Number(row.dataset.volumeMl);
     const abv_pct    = Number(row.dataset.abvPct);
@@ -358,6 +405,20 @@ function _updateDrinkRowFeedback(row, dtTime, dtDur) {
     const with_food  = row.dataset.withFood   === 'true';
     metaEl.textContent = _buildDrinkMeta(volume_ml, abv_pct, newDur, carbonated, with_food);
     metaEl.classList.toggle('log-entry-feedback-active', dtDur !== 0);
+  }
+}
+
+/**
+ * Update the time label of a food row during drag.
+ * Time wraps around midnight.
+ */
+function _updateFoodRowFeedback(row, dtTime) {
+  const origTime = Number(row.dataset.origTimeMin);
+  const newTime  = wrapTime(origTime % 1440 + dtTime);
+  const timeEl   = row.querySelector('.log-entry-time');
+  if (timeEl) {
+    timeEl.textContent = fmtTime(newTime);
+    timeEl.classList.toggle('log-entry-feedback-active', dtTime !== 0);
   }
 }
 
