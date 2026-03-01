@@ -240,16 +240,17 @@ const DRAG_THRESHOLD   = 8;
  *
  * Interaction model:
  *   • Short tap (< LONG_PRESS_MS, < ABORT_THRESHOLD movement) → onTap()
+ *   • Vertical swipe before hold completes → window.scrollBy() simulates page scroll
+ *   • Horizontal swipe before hold completes → cancels long-press (no gesture, no tap)
  *   • Hold LONG_PRESS_MS without moving → gesture activates (haptic + visual)
  *   • Horizontal drag after activation → onGesture(dtTime, 0), live onChartLive
  *   • Vertical drag after activation (allowVertical) → onGesture(0, dtDur), live onChartLive
- *   • pointercancel (browser takes over for scroll) → clears timer, restores chart
  *
- * touch-action: pan-y on the row (set via CSS) allows normal vertical page-scroll
- * before the hold completes.  Once the hold fires, touch-action is switched to
- * none so the browser can no longer fire pointercancel for vertical movement,
- * enabling both vertical duration drags and diagonal deviations from a locked
- * horizontal axis without the gesture being cancelled.
+ * CSS sets touch-action:none on the rows so the browser never intercepts touch
+ * events.  Page scrolling is done manually with window.scrollBy() in JS when
+ * vertical movement is detected before the long-press timer fires.  This is the
+ * only approach that lets us support both native-feeling page scroll AND vertical
+ * duration drag — dynamic touch-action changes mid-gesture are ignored by browsers.
  *
  * @param {HTMLElement} row
  * @param {{ allowVertical: boolean, onTap: Function, onGesture: Function,
@@ -264,23 +265,18 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
   let longPressTimer  = null;
   let lastDtTime      = 0;
   let lastDtDur       = 0;
+  let scrollMode      = false;  // true when pre-hold vertical swipe detected
+  let lastScrollY     = 0;      // tracks incremental scroll steps
 
   const activateGesture = () => {
-    if (activePointerId == null) return;
+    if (activePointerId == null || scrollMode) return;
     gestureReady = true;
-    // Switch to touch-action:none so the browser can no longer intercept
-    // vertical movement for scrolling.  The CSS sets pan-y (allowing page
-    // scroll before the hold completes); we override it here so that both
-    // vertical duration drags and diagonal deviations during a horizontal
-    // drag no longer fire pointercancel.
-    row.style.touchAction = 'none';
     row.setPointerCapture(activePointerId);
     row.classList.add('log-entry-held');
     navigator.vibrate?.(15);
   };
 
   const reset = () => {
-    row.style.touchAction = ''; // restore CSS pan-y
     clearTimeout(longPressTimer);
     longPressTimer  = null;
     axisLocked      = null;
@@ -289,6 +285,8 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
     gestureReady    = false;
     lastDtTime      = 0;
     lastDtDur       = 0;
+    scrollMode      = false;
+    lastScrollY     = 0;
     row.classList.remove('log-entry-held', 'log-entry-dragging', 'log-entry-drag-x', 'log-entry-drag-y');
   };
 
@@ -301,6 +299,8 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
     gestureReady    = false;
     lastDtTime      = 0;
     lastDtDur       = 0;
+    scrollMode      = false;
+    lastScrollY     = e.clientY;
     activePointerId = e.pointerId;
     longPressTimer  = setTimeout(activateGesture, LONG_PRESS_MS);
   });
@@ -311,8 +311,25 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
     const dy = e.clientY - startY;
 
     if (!gestureReady) {
-      // During hold: cancel if the pointer moved too far (user intends to scroll)
-      if (Math.abs(dx) > ABORT_THRESHOLD || Math.abs(dy) > ABORT_THRESHOLD) {
+      // Track incremental vertical step for manual page-scroll simulation
+      const stepY = e.clientY - lastScrollY;
+      lastScrollY = e.clientY;
+
+      if (scrollMode) {
+        // Already in scroll mode — continue scrolling the page
+        window.scrollBy(0, -stepY);
+        return;
+      }
+      if (Math.abs(dy) > ABORT_THRESHOLD) {
+        // Vertical intent before hold → enter scroll mode, cancel long-press
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+        scrollMode = true;
+        window.scrollBy(0, -stepY);
+        return;
+      }
+      if (Math.abs(dx) > ABORT_THRESHOLD) {
+        // Horizontal movement before hold → cancel long-press (not a tap, not a gesture)
         clearTimeout(longPressTimer);
         longPressTimer  = null;
         activePointerId = null;
@@ -329,7 +346,7 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
     }
 
     if (axisLocked) {
-      e.preventDefault(); // block scroll once axis is committed
+      e.preventDefault();
       const dtTime = axisLocked === 'x' ? Math.round(dx / PX_PER_MIN) : 0;
       const dtDur  = axisLocked === 'y' ? -Math.round(dy / PX_PER_MIN) : 0;
       updateFeedback(row, dtTime, dtDur);
@@ -343,10 +360,11 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
 
   row.addEventListener('pointerup', e => {
     if (activePointerId !== e.pointerId) return;
-    const wasReady = gestureReady;
-    const wasDrag  = didDrag && axisLocked;
-    const finalDx  = e.clientX - startX;
-    const finalDy  = e.clientY - startY;
+    const wasReady  = gestureReady;
+    const wasDrag   = didDrag && axisLocked;
+    const wasScroll = scrollMode;
+    const finalDx   = e.clientX - startX;
+    const finalDy   = e.clientY - startY;
     const finalAxis = axisLocked;
     reset();
 
@@ -354,7 +372,7 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
       const dtTime = finalAxis === 'x' ? Math.round(finalDx / PX_PER_MIN) : 0;
       const dtDur  = finalAxis === 'y' ? -Math.round(finalDy / PX_PER_MIN) : 0;
       onGesture?.(dtTime, dtDur);
-    } else {
+    } else if (!wasScroll) {
       // Short tap or hold-without-drag: open edit panel
       onTap?.();
     }
@@ -362,9 +380,10 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
 
   row.addEventListener('pointercancel', e => {
     if (activePointerId !== e.pointerId) return;
-    // Browser took over (e.g. scroll); restore chart preview and clear state
-    updateFeedback(row, 0, 0);
-    if (onChartLive) onChartLive(0, 0);
+    if (gestureReady) {
+      updateFeedback(row, 0, 0);
+      if (onChartLive) onChartLive(0, 0);
+    }
     reset();
   });
 

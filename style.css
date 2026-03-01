@@ -234,12 +234,12 @@ body {
   transition: color 0.1s;
 }
 
-/* Allow vertical page-scroll through log entries before long-press activates.
-   Once the 300 ms hold fires and setPointerCapture is called, the gesture
-   handler takes full control via e.preventDefault() in pointermove. */
+/* touch-action:none so the browser never intercepts touch events on log rows.
+   Page scrolling is simulated manually in JS via window.scrollBy() when
+   vertical movement is detected before the long-press timer fires. */
 .log-entry-drink,
 .log-entry-food {
-  touch-action: pan-y;
+  touch-action: none;
   -webkit-user-select: none;
   user-select: none;
 }
