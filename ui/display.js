@@ -224,6 +224,20 @@ export function renderSessionLog(
   });
 }
 
+// ─── Gesture value overlay ────────────────────────────────────────────────────
+
+function _showGestureOverlay(text) {
+  const el = document.getElementById('gesture-overlay');
+  if (!el) return;
+  el.textContent = text;
+  el.hidden = false;
+}
+
+function _hideGestureOverlay() {
+  const el = document.getElementById('gesture-overlay');
+  if (el) el.hidden = true;
+}
+
 // ─── Shared gesture handler ────────────────────────────────────────────────────
 
 /** ms the pointer must be held still before drag mode activates. */
@@ -274,6 +288,10 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
     row.setPointerCapture(activePointerId);
     row.classList.add('log-entry-held');
     navigator.vibrate?.(15);
+    // Show overlay with the row's current values (before any drag)
+    const t = wrapTime(Number(row.dataset.origTimeMin) % 1440);
+    const d = row.dataset.origDurationMin;
+    _showGestureOverlay(d != null ? `${fmtTime(t)}  ·  ${Number(d)} min` : fmtTime(t));
   };
 
   const reset = () => {
@@ -288,6 +306,7 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
     scrollMode      = false;
     lastScrollY     = 0;
     row.classList.remove('log-entry-held', 'log-entry-dragging', 'log-entry-drag-x', 'log-entry-drag-y');
+    _hideGestureOverlay();
   };
 
   row.addEventListener('pointerdown', e => {
@@ -434,6 +453,9 @@ function _updateDrinkRowFeedback(row, dtTime, dtDur) {
     metaEl.textContent = _buildDrinkMeta(volume_ml, abv_pct, newDur, carbonated, with_food);
     metaEl.classList.toggle('log-entry-feedback-active', dtDur !== 0);
   }
+  // Live overlay: show whichever value is currently being dragged
+  if (dtTime !== 0) _showGestureOverlay(fmtTime(newTime));
+  else if (dtDur !== 0) _showGestureOverlay(`${newDur} min`);
 }
 
 /**
@@ -448,6 +470,7 @@ function _updateFoodRowFeedback(row, dtTime) {
     timeEl.textContent = fmtTime(newTime);
     timeEl.classList.toggle('log-entry-feedback-active', dtTime !== 0);
   }
+  if (dtTime !== 0) _showGestureOverlay(fmtTime(newTime));
 }
 
 // ─── Drink icon ───────────────────────────────────────────────────────────────

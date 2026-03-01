@@ -526,6 +526,29 @@ label.toggle-label { flex-direction: row; align-items: center; }
   justify-content: center;
 }
 
+/* ── Gesture value overlay ───────────────────────────────────────────────────── */
+/* Floating pill shown at the top of the viewport while the user drags a
+   log entry.  Displays the current time or duration in large text so the
+   user can read the value without the entry row being obscured by a finger. */
+#gesture-overlay {
+  position: fixed;
+  top: env(safe-area-inset-top, 0.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--c-text);
+  color: var(--c-bg);
+  border-radius: 999px;
+  padding: 0.4rem 1.6rem;
+  font-size: 2.2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 300;
+  box-shadow: 0 4px 20px rgb(0 0 0 / 0.35);
+}
+
 /* ── Utility ─────────────────────────────────────────────────────────────────── */
 [hidden] { display: none !important; }
 .custom-form { display: flex; flex-direction: column; gap: 0.5rem; }
