@@ -258,14 +258,15 @@ const DRAG_THRESHOLD   = 8;
  *
  * Interaction model:
  *   • Short tap (< LONG_PRESS_MS, < ABORT_THRESHOLD movement) → onTap()
- *   • Vertical swipe before hold completes → window.scrollBy() simulates page scroll
+ *   • Vertical swipe before hold completes → scrolls #main (the overflow container)
  *   • Horizontal swipe before hold completes → cancels long-press (no gesture, no tap)
  *   • Hold LONG_PRESS_MS without moving → gesture activates (haptic + visual)
  *   • Horizontal drag after activation → onGesture(dtTime, 0), live onChartLive
  *   • Vertical drag after activation (allowVertical) → onGesture(0, dtDur), live onChartLive
  *
  * CSS sets touch-action:none on the rows so the browser never intercepts touch
- * events.  Page scrolling is done manually with window.scrollBy() in JS when
+ * events.  Page scrolling is driven manually by scrolling the #main overflow
+ * container (NOT window — the body never overflows in this flex layout) when
  * vertical movement is detected before the long-press timer fires.  This is the
  * only approach that lets us support both native-feeling page scroll AND vertical
  * duration drag — dynamic touch-action changes mid-gesture are ignored by browsers.
@@ -346,7 +347,7 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
       lastScrollY = e.clientY;
 
       if (scrollMode) {
-        window.scrollBy(0, -stepY);
+        document.getElementById('main').scrollBy(0, -stepY);
         return;
       }
 
@@ -359,7 +360,7 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
         clearTimeout(longPressTimer);
         longPressTimer = null;
         scrollMode = true;
-        window.scrollBy(0, -dy);
+        document.getElementById('main').scrollBy(0, -dy);
         return;
       }
       if (adx > ABORT_THRESHOLD) {
