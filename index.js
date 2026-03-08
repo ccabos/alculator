@@ -323,14 +323,16 @@ function _liveFoodChartUpdate(index, dtTimeMins) {
   const t_start = Math.min(...all_t) - 30;
   const t_end   = now_min + 120;
 
-  const series  = bacSeries(nDrinks, nFood, profile, t_start, t_end);
+  // soft=true: linearly fade the nearest food event's effect in the zone just
+  // outside its exact coverage window so the BAC line responds to any drag.
+  const series  = bacSeries(nDrinks, nFood, profile, t_start, t_end, true);
   const now_idx = series.findIndex(p => p.t_min >= now_min) ?? series.length - 1;
   const bac_now = series[Math.max(0, now_idx)]?.bac_pct ?? 0;
   const bounds  = uncertaintyBounds(bac_now);
   let sober_t = findSoberTime(series);
   let extended = series;
   if (sober_t !== null && sober_t > t_end) {
-    extended = bacSeries(nDrinks, nFood, profile, t_start, sober_t + 360);
+    extended = bacSeries(nDrinks, nFood, profile, t_start, sober_t + 360, true);
     sober_t  = findSoberTime(extended);
     if (sober_t !== null && sober_t > extended[extended.length - 1].t_min) sober_t = null;
   }

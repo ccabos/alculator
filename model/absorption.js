@@ -130,9 +130,13 @@ export function absorptionFraction(elapsed_min, T_absorb, duration_min = 0) {
  * @param {boolean} carbonated
  * @param {Array<{time_min: number, type: string}>} food_events
  * @param {boolean} with_food_flag
+ * @param {boolean} [soft=false]   — when true, linearly fade the nearest food event's
+ *   effect in the zone between 1× and 2× post_window outside exact coverage.  Used only
+ *   during live drag previews so the BAC line responds smoothly to food time changes
+ *   without crossing a hard window boundary.  Has no effect on committed values.
  * @returns {{ T_absorb: number, ethanol_factor: number }}
  */
-export function resolveModifiers(drink_time_min, carbonated, food_events, with_food_flag) {
+export function resolveModifiers(drink_time_min, carbonated, food_events, with_food_flag, soft = false) {
   const tb = tBase(carbonated);
   const covering = [];
 
@@ -147,6 +151,33 @@ export function resolveModifiers(drink_time_min, carbonated, food_events, with_f
   if (covering.length > 0) {
     const best = selectBestCovering(covering);
     return { T_absorb: best.T_absorb, ethanol_factor: best.ethanol_factor };
+  }
+
+  // Soft-coverage falloff zone: food is outside the exact window but close enough
+  // that its effect should partially apply.  Only used for live drag previews.
+  if (soft) {
+    let bestW = 0, bestParams = null;
+    for (const fe of food_events) {
+      const params = FOOD_PARAMS[fe.type];
+      if (!params) continue;
+      // Case A soft: drink is 1–2× post_window after food (food too far before drink)
+      const d = drink_time_min - fe.time_min;
+      if (d > params.post_window && d <= params.post_window * 2) {
+        const w = 1 - (d - params.post_window) / params.post_window;
+        if (w > bestW) { bestW = w; bestParams = params; }
+      }
+    }
+    if (bestParams) {
+      // Interpolate between the current fallback (flag or fasted) and full food effect
+      const t0 = with_food_flag
+        ? (carbonated ? WITH_FOOD_FLAG.T_absorb.carbonated : WITH_FOOD_FLAG.T_absorb.normal)
+        : tb;
+      const f0 = with_food_flag ? WITH_FOOD_FLAG.ethanol_factor : 1.0;
+      return {
+        T_absorb:       t0 + (bestParams.T_absorb - t0) * bestW,
+        ethanol_factor: f0 + (bestParams.ethanol_factor - f0) * bestW,
+      };
+    }
   }
 
   if (with_food_flag) {
