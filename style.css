@@ -155,7 +155,6 @@ body {
   flex: 1;
   overflow-y: auto;
   padding-bottom: 1rem;
-  overscroll-behavior: none;
 }
 
 #profile-guard {
