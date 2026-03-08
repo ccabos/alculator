@@ -155,6 +155,7 @@ body {
   flex: 1;
   overflow-y: auto;
   padding-bottom: 1rem;
+  overscroll-behavior: none;
 }
 
 #profile-guard {
@@ -204,7 +205,11 @@ body {
   padding-left: 0.25rem;
   padding-right: 0.25rem;
 }
-.log-entry:hover { background: var(--c-border); }
+/* Hover highlight only on real pointer devices; on touch, the browser
+   simulates :hover on the touched element during scroll and causes flicker. */
+@media (hover: hover) {
+  .log-entry:hover { background: var(--c-border); }
+}
 .log-entry:last-child { border-bottom: none; }
 .log-entry-icon { font-size: 1.1rem; flex-shrink: 0; }
 .log-entry-main { flex: 1; min-width: 0; }
@@ -231,13 +236,16 @@ body {
 }
 
 /* touch-action:none so the browser never intercepts touch events on log rows.
-   Page scrolling is simulated manually in JS via window.scrollBy() when
-   vertical movement is detected before the long-press timer fires. */
+   Page scrolling is driven manually via #main.scrollBy() in JS when vertical
+   movement is detected before the long-press timer fires.
+   -webkit-tap-highlight-color:transparent suppresses the iOS tap flash that
+   would otherwise flicker during every scroll gesture over these rows. */
 .log-entry-drink,
 .log-entry-food {
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Visual indicator shown while the long-press hold is active */
