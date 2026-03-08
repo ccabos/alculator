@@ -40,7 +40,7 @@ import { computeR } from './profile.js';
  * @param {number} t_end_min    — last minute in the series (inclusive)
  * @returns {Array<{ t_min: number, bac_pct: number }>}
  */
-export function bacSeries(drinks, food_events, profile, t_start_min, t_end_min) {
+export function bacSeries(drinks, food_events, profile, t_start_min, t_end_min, soft = false) {
   if (!drinks || drinks.length === 0) {
     const out = [];
     for (let t = t_start_min; t <= t_end_min; t++) out.push({ t_min: t, bac_pct: 0 });
@@ -57,6 +57,7 @@ export function bacSeries(drinks, food_events, profile, t_start_min, t_end_min) 
       d.carbonated ?? false,
       food_events,
       d.with_food ?? false,
+      soft,
     );
     return {
       time_min:      d.time_min,
