@@ -122,7 +122,8 @@ body {
 
 /* Caution wraps to a second line only when visible */
 #bac-meta { order: 3; width: 100%; }
-.bac-range   { font-size: 0.8rem; color: var(--c-muted); }
+.bac-range   { display: inline-flex; flex-direction: column; align-items: flex-start;
+               font-size: 0.75rem; line-height: 1.2; color: var(--c-muted); }
 .bac-caution { font-size: 0.8rem; color: var(--c-danger); }
 
 #sober-time-row {
@@ -133,7 +134,8 @@ body {
   margin-left: auto;
   order: 2;
 }
-#sober-label { color: var(--c-muted); }
+#sober-time-stack { display: flex; flex-direction: column; line-height: 1.25; }
+#sober-label { color: var(--c-muted); font-size: 0.75rem; }
 #sober-time  { font-weight: 600; }
 #sober-time-row #refresh-btn { margin-left: 0.25rem; }
 
