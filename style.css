@@ -281,6 +281,22 @@ body {
   justify-content: center;
 }
 .log-action-btn:hover { color: var(--c-danger); border-color: var(--c-danger); }
+.delete-btn-confirm {
+  color: var(--c-danger);
+  border-color: var(--c-danger);
+  background: color-mix(in srgb, var(--c-danger) 10%, transparent);
+  font-weight: 700;
+}
+
+/* Drag affordance hint */
+.log-drag-hint {
+  color: var(--c-border);
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
+  pointer-events: none;
+  user-select: none;
+}
 
 /* ── Footer / action bar ─────────────────────────────────────────────────────── */
 #footer {
