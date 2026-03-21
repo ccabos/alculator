@@ -239,8 +239,10 @@ function _bindTooltip(svgEl, series, t_min_x, t_max_x, PW, ML, MT) {
     );
     tooltip.textContent = `${(nearest.bac_pct * 10).toFixed(2)} ‰  ·  ${_fmtHHMM(nearest.t_min)}`;
     tooltip.hidden = false;
-    tooltip.style.left = `${Math.min(clientX + 8, window.innerWidth - 120)}px`;
-    tooltip.style.top  = `${(e.touches ? e.touches[0].clientY : e.clientY) - 30}px`;
+    const tipW = tooltip.offsetWidth || 110;
+    const leftRaw = clientX + 12;
+    tooltip.style.left = `${leftRaw + tipW > window.innerWidth - 4 ? clientX - tipW - 12 : leftRaw}px`;
+    tooltip.style.top  = `${rect.top + MT + 4}px`;
   }
 
   hitArea.addEventListener('mousemove',  showTooltip);

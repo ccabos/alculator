@@ -152,6 +152,7 @@ export function renderSessionLog(
               data-volume-ml="${d.volume_ml}" data-abv-pct="${d.abv_pct}"
               data-carbonated="${d.carbonated}" data-with-food="${d.with_food}"
               role="button" tabindex="0" aria-label="Edit ${esc(name)}">
+        <span class="log-drag-hint" aria-hidden="true">⠿</span>
         <span class="log-entry-icon" aria-hidden="true">${drinkIcon(d.preset_id)}</span>
         <div class="log-entry-main">
           <div class="log-entry-name">${esc(name)}</div>
@@ -169,6 +170,7 @@ export function renderSessionLog(
       return `<div class="log-entry log-entry-food" data-kind="food" data-index="${ev.index}"
               data-orig-time-min="${f.time_min}"
               role="button" tabindex="0" aria-label="Edit ${esc(label)}">
+        <span class="log-drag-hint" aria-hidden="true">⠿</span>
         <span class="log-entry-icon" aria-hidden="true">🍽</span>
         <div class="log-entry-main">
           <div class="log-entry-name">${esc(label)}</div>
@@ -209,19 +211,30 @@ export function renderSessionLog(
     });
   });
 
-  // Delete buttons
-  container.querySelectorAll('.delete-drink-btn').forEach(btn => {
+  // Delete buttons — two-tap confirmation
+  function _bindDeleteBtn(btn, onDelete) {
+    let timer = null;
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      onDeleteDrink(Number(btn.dataset.index));
+      if (btn.dataset.confirm === '1') {
+        clearTimeout(timer);
+        onDelete(Number(btn.dataset.index));
+      } else {
+        btn.dataset.confirm = '1';
+        btn.classList.add('delete-btn-confirm');
+        btn.textContent = '✓';
+        btn.setAttribute('aria-label', btn.getAttribute('aria-label').replace('Delete', 'Confirm delete'));
+        timer = setTimeout(() => {
+          btn.dataset.confirm = '';
+          btn.classList.remove('delete-btn-confirm');
+          btn.textContent = '✕';
+          btn.setAttribute('aria-label', btn.getAttribute('aria-label').replace('Confirm delete', 'Delete'));
+        }, 2000);
+      }
     });
-  });
-  container.querySelectorAll('.delete-food-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      onDeleteFood(Number(btn.dataset.index));
-    });
-  });
+  }
+  container.querySelectorAll('.delete-drink-btn').forEach(btn => _bindDeleteBtn(btn, onDeleteDrink));
+  container.querySelectorAll('.delete-food-btn').forEach(btn => _bindDeleteBtn(btn, onDeleteFood));
 }
 
 // ─── Gesture value overlay ────────────────────────────────────────────────────
