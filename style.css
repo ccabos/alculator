@@ -84,22 +84,27 @@ body {
 #header {
   background: var(--c-surface);
   border-bottom: 1px solid var(--c-border);
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 1rem;
   flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
 }
 
 #bac-display {
   display: flex;
   align-items: baseline;
-  gap: 0.5rem;
+  gap: 0.4rem;
+  order: 1;
 }
 #bac-value {
-  font-size: 2.5rem;
+  font-size: 1.75rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
 }
-#bac-unit { color: var(--c-muted); font-size: 1rem; }
+#bac-unit { color: var(--c-muted); font-size: 0.9rem; }
 
 .badge {
   display: inline-block;
@@ -115,20 +120,22 @@ body {
 .badge-drunk  { background: var(--c-drunk); }
 .badge-heavy  { background: var(--c-heavy); }
 
-#bac-meta { min-height: 1.25rem; }
-.bac-range  { font-size: 0.8rem; color: var(--c-muted); }
+/* Caution wraps to a second line only when visible */
+#bac-meta { order: 3; width: 100%; }
+.bac-range   { font-size: 0.8rem; color: var(--c-muted); }
 .bac-caution { font-size: 0.8rem; color: var(--c-danger); }
 
 #sober-time-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-  margin-top: 0.25rem;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  margin-left: auto;
+  order: 2;
 }
 #sober-label { color: var(--c-muted); }
 #sober-time  { font-weight: 600; }
-#sober-time-row #refresh-btn { margin-left: auto; }
+#sober-time-row #refresh-btn { margin-left: 0.25rem; }
 
 .toggle-label {
   display: flex;
