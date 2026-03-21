@@ -122,7 +122,8 @@ body {
 
 /* Caution wraps to a second line only when visible */
 #bac-meta { order: 3; width: 100%; }
-.bac-range   { font-size: 0.8rem; color: var(--c-muted); }
+.bac-range   { display: inline-flex; flex-direction: column; align-items: flex-start;
+               font-size: 0.75rem; line-height: 1.2; color: var(--c-muted); }
 .bac-caution { font-size: 0.8rem; color: var(--c-danger); }
 
 #sober-time-row {
@@ -133,7 +134,8 @@ body {
   margin-left: auto;
   order: 2;
 }
-#sober-label { color: var(--c-muted); }
+#sober-time-stack { display: flex; flex-direction: column; line-height: 1.25; }
+#sober-label { color: var(--c-muted); font-size: 0.75rem; }
 #sober-time  { font-weight: 600; }
 #sober-time-row #refresh-btn { margin-left: 0.25rem; }
 
@@ -580,6 +582,67 @@ label.toggle-label { flex-direction: row; align-items: center; }
   pointer-events: none;
   z-index: 300;
   box-shadow: 0 4px 20px rgb(0 0 0 / 0.35);
+}
+
+/* ── Theory / background panel ───────────────────────────────────────────────── */
+.theory {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--c-text);
+}
+.theory-intro {
+  color: var(--c-muted);
+  font-style: italic;
+}
+.theory h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-top: 0.4rem;
+  color: var(--c-text);
+  border-bottom: 1px solid var(--c-border);
+  padding-bottom: 0.2rem;
+}
+.theory h4 {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--c-text);
+}
+.theory p, .theory ul, .theory ol { margin: 0; }
+.theory ul, .theory ol {
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.theory-formula {
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+.theory-refs {
+  font-size: 0.78rem;
+  color: var(--c-muted);
+  gap: 0.35rem !important;
+}
+.theory-refs li { font-style: italic; }
+.theory-disclaimer {
+  background: #fef3c7;
+  color: #78350f;
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.82rem;
+}
+@media (prefers-color-scheme: dark) {
+  .theory-disclaimer { background: #451a03; color: #fde68a; }
 }
 
 /* ── Utility ─────────────────────────────────────────────────────────────────── */

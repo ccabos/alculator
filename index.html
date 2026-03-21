@@ -35,8 +35,10 @@
       </span>
     </div>
     <div id="sober-time-row">
-      <span id="sober-label">Sober by:</span>
-      <span id="sober-time" aria-live="polite">—</span>
+      <div id="sober-time-stack">
+        <span id="sober-label">Sober by:</span>
+        <span id="sober-time" aria-live="polite">—</span>
+      </div>
       <button id="refresh-btn" aria-label="Refresh BAC estimate">↻</button>
     </div>
   </header>
@@ -74,6 +76,9 @@
     </button>
     <button id="profile-btn"    class="btn btn-secondary action-btn" aria-label="Edit profile">
       <span class="btn-icon">👤</span>Profile
+    </button>
+    <button id="background-btn" class="btn btn-secondary action-btn" aria-label="Model background">
+      <span class="btn-icon">📖</span>Background
     </button>
     <button id="export-btn"     class="btn btn-secondary action-btn" aria-label="Export session">
       <span class="btn-icon">↓</span>Export
@@ -239,6 +244,266 @@
           <button id="preset-edit-save"   class="btn btn-primary">Save Preset</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Theory / background panel -->
+  <div id="background-panel" class="panel" role="dialog" aria-modal="true"
+       aria-label="Model background" hidden>
+    <div class="panel-inner">
+      <div class="panel-header">
+        <h2>How the BAC estimate works</h2>
+        <button class="panel-close" data-close="background-panel" aria-label="Close">✕</button>
+      </div>
+      <article class="theory">
+
+        <p class="theory-intro">
+          Alculator models your blood-alcohol concentration (BAC) minute by minute using
+          established pharmacokinetic equations. This page explains every step.
+        </p>
+
+        <h3>1. Ethanol dose</h3>
+        <p>
+          The mass of pure ethanol in a drink is calculated from its volume and
+          alcohol-by-volume (ABV) rating, using the physical density of ethanol
+          (0.789 g/mL):
+        </p>
+        <div class="theory-formula">
+          Ethanol (g) = Volume (mL) × ABV/100 × 0.789
+        </div>
+        <p>
+          For example, a 330 mL beer at 5 % ABV contains
+          330 × 0.05 × 0.789 ≈ 13.0 g of ethanol.
+        </p>
+
+        <h3>2. Volume of distribution — the Widmark <em>r</em> factor</h3>
+        <p>
+          Ethanol distributes throughout the body water, not just the bloodstream.
+          The Widmark <em>r</em> factor (also called the apparent volume of distribution)
+          describes what fraction of body mass effectively dilutes the alcohol. A larger
+          body-water compartment means the same dose produces a lower BAC.
+        </p>
+        <p>
+          When height is provided, Alculator uses the
+          <strong>Seidl et al. (2000)</strong> regression, which is more accurate than
+          the population-mean fallback:
+        </p>
+        <div class="theory-formula">
+          Male:&nbsp;&nbsp; r = 0.31608 − 0.004821 × W + 0.4632 × H<br>
+          Female: r = 0.31223 − 0.006446 × W + 0.4466 × H
+        </div>
+        <p>
+          where W is weight in kg and H is height in metres. When height is not
+          known, Widmark's (1932) population means are used instead
+          (male: 0.68, female: 0.55).
+        </p>
+        <p>
+          The Widmark formula then converts ethanol mass to BAC:
+        </p>
+        <div class="theory-formula">
+          BAC (%) = Ethanol (g) / (Weight (kg) × 1000 × r) × 100
+        </div>
+
+        <h3>3. Absorption</h3>
+        <p>
+          Alcohol is not absorbed instantly. It passes through the stomach into the
+          small intestine, where most absorption occurs. The speed depends on
+          gastric emptying, carbonation, and food in the stomach.
+        </p>
+
+        <h4>3a. Linear ramp model</h4>
+        <p>
+          For a drink consumed quickly (instantaneous model), absorption follows a
+          linear ramp from 0 % to 100 % over a window T<sub>absorb</sub>:
+        </p>
+        <div class="theory-formula">
+          f(elapsed) = clamp(elapsed / T<sub>absorb</sub>, 0, 1)
+        </div>
+        <p>
+          Base absorption windows (fasted, no food):
+          <strong>45 min</strong> for still drinks;
+          <strong>20 min</strong> for carbonated drinks. Carbonation accelerates
+          gastric emptying (Ridout et al., 2003), so beer and champagne reach
+          the bloodstream faster.
+        </p>
+
+        <h4>3b. Extended-duration model</h4>
+        <p>
+          When a drink is sipped over a period D minutes, each sip starts its own
+          T<sub>absorb</sub> ramp at the moment it is consumed. The total absorbed
+          fraction is the convolution of a uniform intake rate with the linear ramp,
+          computed analytically:
+        </p>
+        <div class="theory-formula">
+          f(elapsed) = [ H(elapsed) − H(elapsed − D) ] / D<br><br>
+          where H(x) = 0&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if x ≤ 0<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x² / (2T)&nbsp; if 0 &lt; x ≤ T<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x − T/2&nbsp;&nbsp; if x &gt; T
+        </div>
+        <p>
+          This closed-form solution has no numerical error, correctly starts absorbing
+          from the first sip, and finishes at elapsed = D + T<sub>absorb</sub>
+          (last sip fully absorbed). It reduces continuously to the instantaneous
+          formula as D → 0.
+        </p>
+
+        <h3>4. Food effects</h3>
+        <p>
+          Food in the stomach affects alcohol in two ways:
+        </p>
+        <ul>
+          <li>
+            <strong>Slower gastric emptying</strong> — food delays alcohol reaching
+            the small intestine, spreading absorption over a longer window. This means
+            more alcohol is eliminated concurrently with absorption, reducing the peak BAC.
+          </li>
+          <li>
+            <strong>Increased first-pass metabolism (FPM)</strong> — gastric alcohol
+            dehydrogenase (ADH) metabolises some ethanol in the stomach before it
+            ever reaches the bloodstream. Food stimulates gastric ADH activity,
+            increasing this pre-systemic breakdown (Frezza et al., 1990).
+          </li>
+        </ul>
+        <p>
+          Both effects are captured together: a meal-size-dependent T<sub>absorb</sub>
+          (Levitt &amp; Levitt, 2020) and an ethanol_factor multiplier (&lt; 1.0)
+          that reduces the effective dose:
+        </p>
+        <div class="theory-formula">
+          Snack:&nbsp;&nbsp;&nbsp;&nbsp; T = 60 min, factor = 0.97, covers drinks for 60 min<br>
+          Light meal: T = 75 min, factor = 0.95, covers drinks for 90 min<br>
+          Full meal:&nbsp; T = 90 min, factor = 0.92, covers drinks for 150 min<br>
+          Heavy meal: T = 120 min, factor = 0.90, covers drinks for 180 min
+        </div>
+
+        <h4>Food coverage rules</h4>
+        <p>A food event covers a drink (and its modifiers apply) if:</p>
+        <ul>
+          <li>
+            <strong>Case A</strong> — food was in the stomach at or before the drink
+            was started, and the drink was consumed within the food event's post-window:
+            t<sub>food</sub> ≤ t<sub>drink</sub> ≤ t<sub>food</sub> + post_window.
+          </li>
+          <li>
+            <strong>Case B</strong> — the drink was started before food arrived, but
+            absorption was still ongoing when food entered (i.e. the drink had not yet
+            been fully absorbed): t<sub>drink</sub> &lt; t<sub>food</sub> and
+            t<sub>drink</sub> + T<sub>base</sub> ≥ t<sub>food</sub>.
+          </li>
+        </ul>
+        <p>
+          When multiple food events cover the same drink, the most protective one
+          wins (lowest ethanol_factor; tie-break: highest T<sub>absorb</sub>).
+          The per-drink "eating alongside" checkbox acts as a coarse fallback when no
+          timestamped food event covers the drink.
+        </p>
+
+        <h3>5. Elimination — Michaelis-Menten kinetics</h3>
+        <p>
+          Alcohol is primarily metabolised in the liver by the enzyme alcohol
+          dehydrogenase (ADH). At the blood concentrations typical of social drinking,
+          ADH is nearly saturated, and elimination proceeds at a roughly constant rate.
+          This is why BAC drops linearly over most of a drinking session. However, at
+          very low BAC (&lt; ~10 mg/dL), ADH becomes unsaturated and elimination slows,
+          causing the curve to tail off smoothly rather than abruptly hit zero.
+        </p>
+        <p>
+          The classic <strong>Widmark β</strong> model assumes purely constant
+          (zero-order) elimination, which overestimates the rate at low BAC and
+          creates an unrealistic hard floor. Alculator instead uses the
+          <strong>Michaelis-Menten</strong> equation (Holford, 1987; Norberg et al., 2003),
+          which captures both regimes:
+        </p>
+        <div class="theory-formula">
+          β<sub>eff</sub>(c) = β<sub>max</sub> × c / (c + K<sub>m</sub>)
+        </div>
+        <ul>
+          <li>β<sub>max</sub> = 0.015 % BAC/hour — maximum elimination rate
+            (population mean; range 0.010–0.020)</li>
+          <li>K<sub>m</sub> = 0.015 % BAC — ADH half-saturation constant
+            (~10–15 mg/dL)</li>
+        </ul>
+        <p>
+          At high BAC (c ≫ K<sub>m</sub>), β<sub>eff</sub> → β<sub>max</sub>,
+          giving zero-order kinetics identical to Widmark. At low BAC
+          (c ≪ K<sub>m</sub>), β<sub>eff</sub> → β<sub>max</sub> × c / K<sub>m</sub>,
+          giving first-order kinetics: the rate drops proportionally with BAC,
+          and the curve smoothly approaches zero.
+        </p>
+
+        <h3>6. The simulation loop</h3>
+        <p>
+          The model runs minute by minute from the first drink to two hours beyond
+          the present (extended further if needed to find sober time). At each minute:
+        </p>
+        <div class="theory-formula">
+          BAC[t] = max(0, BAC[t−1] + ΔBAC<sub>abs</sub>(t) − ΔBAC<sub>elim</sub>(t))
+        </div>
+        <p>where:</p>
+        <ul>
+          <li>
+            ΔBAC<sub>abs</sub>(t) = sum over all drinks of
+            ethanol_g × ethanol_factor × Δf(t) / (weight_kg × 1000 × r) × 100,
+            with Δf(t) = f(t − t<sub>drink</sub>) − f(t − 1 − t<sub>drink</sub>)
+            being the fraction absorbed in this one-minute step.
+          </li>
+          <li>
+            ΔBAC<sub>elim</sub>(t) = β<sub>eff</sub>(BAC[t−1]) / 60,
+            the Michaelis-Menten decrement for one minute.
+          </li>
+        </ul>
+
+        <h3>7. Uncertainty</h3>
+        <p>
+          Individual biological variability in pharmacokinetics is substantial.
+          Factors such as genetic variation in ADH isoforms, body composition
+          measurement error, stomach contents, hydration, and metabolic rate all
+          affect real BAC. Based on Gullberg (2015), the population coefficient of
+          variation for BAC estimates is approximately <strong>±21 %</strong>.
+        </p>
+        <p>
+          The uncertainty band shown on the chart and in the header is:
+        </p>
+        <div class="theory-formula">
+          Lower = BAC × (1 − 0.21)<br>
+          Upper = BAC × (1 + 0.21)
+        </div>
+        <p>
+          The caution warning ⚠ appears when the upper bound exceeds 0.8 ‰,
+          meaning there is a plausible scenario where your true BAC is at or above
+          the common legal driving limit even if the central estimate is below it.
+        </p>
+
+        <h3>8. Sober time</h3>
+        <p>
+          The "Sober by" time is the first minute after which BAC remains below
+          0.001 % (effectively zero) for the rest of the simulated series.
+          If BAC is still above this threshold at the two-hour forecast horizon,
+          the simulation is extended by a further six hours to find the crossing point.
+        </p>
+
+        <h3>References</h3>
+        <ul class="theory-refs">
+          <li>Frezza M. et al. (1990). High blood alcohol levels in women. <em>N Engl J Med</em> 322, 95–99.</li>
+          <li>Gullberg R.G. (2015). Estimating the uncertainty of forensic BAC measurements. <em>Forensic Sci Int</em> 249, 102–109.</li>
+          <li>Holford N.H.G. (1987). Clinical pharmacokinetics of ethanol. <em>Clin Pharmacokinet</em> 13(5), 273–292.</li>
+          <li>Jones A.W. &amp; Andersson L. (1996). Variability of the blood/breath alcohol ratio in drinking drivers. <em>J Forensic Sci</em> 41(6), 916–921.</li>
+          <li>Kalant H. (1971). Absorption, diffusion, distribution, and elimination of ethanol. In <em>The Biology of Alcoholism</em>, vol. 1.</li>
+          <li>Levitt M.D. &amp; Levitt D.G. (2020). The critical role of the question: a review of gastric emptying of alcohol. <em>Alcohol Clin Exp Res</em> 44(5), 996–1002.</li>
+          <li>Norberg Å. et al. (2003). Pharmacokinetics of intravenous ethanol. <em>Clin Pharmacokinet</em> 42(1), 1–10.</li>
+          <li>Ridout F. et al. (2003). Alcohol and the development of alcoholic beverages. <em>Br J Clin Pharmacol</em> 56, 642–644.</li>
+          <li>Seidl S. et al. (2000). The calculation of blood ethanol concentrations. <em>Int J Legal Med</em> 114(1–2), 71–77.</li>
+          <li>Watson P.E. et al. (1980). Prediction of blood alcohol concentrations in human subjects. <em>Alcohol Clin Exp Res</em> 4(1), 45–52.</li>
+          <li>Widmark E.M.P. (1932). <em>Die theoretischen Grundlagen und die praktische Verwendbarkeit der gerichtlich-medizinischen Alkoholbestimmung.</em> Urban &amp; Schwarzenberg.</li>
+        </ul>
+
+        <p class="theory-disclaimer">
+          <strong>Disclaimer:</strong> This model is for informational purposes only.
+          Individual results vary significantly. Do not use this estimate to make
+          safety-critical decisions such as whether to drive.
+        </p>
+
+      </article>
     </div>
   </div>
 

@@ -46,7 +46,7 @@ export function renderBACDisplay(bac_pct, bounds) {
 
   // Range string (compact, inline with the value)
   if (bounds) {
-    rangeEl.textContent = `(${(bounds.lower * 10).toFixed(2)}–${(bounds.upper * 10).toFixed(2)})`;
+    rangeEl.innerHTML = `<span>▲ ${(bounds.upper * 10).toFixed(2)}</span><span>▼ ${(bounds.lower * 10).toFixed(2)}</span>`;
     rangeEl.hidden = false;
   } else {
     rangeEl.hidden = true;

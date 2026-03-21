@@ -99,6 +99,9 @@ async function boot() {
     document.getElementById('disclaimer').hidden = true;
   });
 
+  // Background / theory panel
+  document.getElementById('background-btn').addEventListener('click', () => openPanel('background-panel'));
+
   // Export
   document.getElementById('export-btn').addEventListener('click', () => {
     const json = exportJSON(session);
