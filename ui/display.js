@@ -265,7 +265,7 @@ const DRAG_THRESHOLD   = 8;
  *   • Vertical drag after activation (allowVertical) → onGesture(0, dtDur), live onChartLive
  *
  * CSS sets touch-action:none on the rows so the browser never intercepts touch
- * events.  Page scrolling is driven manually via #main.scrollBy() when
+ * events.  Page scrolling is driven manually via #session-log.scrollBy() when
  * vertical movement is detected before the long-press timer fires.  This is the
  * only approach that lets us support both native-feeling page scroll AND vertical
  * duration drag — dynamic touch-action changes mid-gesture are ignored by browsers.
@@ -346,7 +346,7 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
       lastScrollY = e.clientY;
 
       if (scrollMode) {
-        document.getElementById('main').scrollBy(0, -stepY);
+        document.getElementById('session-log').scrollBy(0, -stepY);
         return;
       }
 
@@ -359,7 +359,7 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
         clearTimeout(longPressTimer);
         longPressTimer = null;
         scrollMode = true;
-        document.getElementById('main').scrollBy(0, -dy);
+        document.getElementById('session-log').scrollBy(0, -dy);
         return;
       }
       if (adx > ABORT_THRESHOLD) {
