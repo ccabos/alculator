@@ -48,7 +48,8 @@ body {
   min-width: 375px;
   display: flex;
   flex-direction: column;
-  height: 100dvh;
+  height: 100vh;    /* fallback */
+  height: 100svh;   /* stable — ignores iOS address-bar animation, prevents reflow flicker */
   overflow: hidden;
 }
 
