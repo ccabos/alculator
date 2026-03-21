@@ -161,7 +161,7 @@ function redraw() {
   const presets = loadPresets();
 
   // Profile guard
-  const profileComplete = profile && profile.sex && profile.weight_kg && profile.age;
+  const profileComplete = profile && profile.sex && profile.weight_kg;
   document.getElementById('profile-guard').hidden = profileComplete;
   document.getElementById('chart-area').hidden    = !profileComplete;
   document.getElementById('bac-display').style.opacity = profileComplete ? '1' : '0.3';
