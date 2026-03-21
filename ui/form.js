@@ -243,12 +243,12 @@ export function initProfilePanel(getSession, setSession) {
     const age    = parseInt(document.getElementById('profile-age').value, 10);
     const height = parseFloat(document.getElementById('profile-height').value) || null;
 
-    if (!sex || !weight || !age) {
-      alert('Please fill in sex, weight, and age.');
+    if (!sex || !weight) {
+      alert('Please fill in sex and weight.');
       return;
     }
 
-    const profile = { sex, weight_kg: weight, age, ...(height ? { height_cm: height } : {}) };
+    const profile = { sex, weight_kg: weight, ...(age ? { age } : {}), ...(height ? { height_cm: height } : {}) };
     const session = getSession();
     const updated = { ...session, profile };
     setSession(updated);

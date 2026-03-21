@@ -48,7 +48,7 @@
 
     <!-- Profile guard (shown when profile is incomplete) -->
     <div id="profile-guard" role="alert" hidden>
-      <p>Enter your <strong>sex, weight, age</strong> to see your BAC estimate.</p>
+      <p>Enter your <strong>sex and weight</strong> to see your BAC estimate.</p>
       <button id="open-profile-btn" class="btn btn-primary">Set up profile</button>
     </div>
 
@@ -184,7 +184,7 @@
         <input type="number" id="profile-weight" min="30" max="300" step="0.5"
                placeholder="e.g. 70">
       </label>
-      <label>Age (years)
+      <label>Age (years) <em class="optional">(optional)</em>
         <input type="number" id="profile-age" min="13" max="120" step="1"
                placeholder="e.g. 30">
       </label>

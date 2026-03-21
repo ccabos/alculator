@@ -89,12 +89,13 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
   gap: 0.25rem 0.75rem;
 }
 
 #bac-display {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.4rem;
   order: 1;
 }
@@ -131,7 +132,6 @@ body {
   align-items: center;
   gap: 0.4rem;
   font-size: 0.85rem;
-  margin-left: auto;
   order: 2;
 }
 #sober-time-stack { display: flex; flex-direction: column; line-height: 1.25; }
@@ -625,7 +625,7 @@ label.toggle-label { flex-direction: row; align-items: center; }
   font-family: ui-monospace, monospace;
   font-size: 0.8rem;
   line-height: 1.7;
-  white-space: pre-wrap;
+  white-space: normal;
   overflow-x: auto;
 }
 .theory-refs {
