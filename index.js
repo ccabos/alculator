@@ -20,7 +20,7 @@ import { renderChart }  from './ui/chart.js';
 import {
   openPanel, closePanel,
   initDrinkPanel, initFoodPanel, initProfilePanel, populateProfilePanel,
-  openDrinkPanelForEdit, openFoodPanelForEdit, resetDrinkPanel,
+  openDrinkPanelForEdit, openFoodPanelForEdit, resetDrinkPanel, resetFoodPanel,
   refreshPresetGrid, initPresetPanel,
 } from './ui/form.js';
 
@@ -76,7 +76,7 @@ async function boot() {
     resetDrinkPanel();
     openPanel('drink-panel');
   });
-  document.getElementById('add-food-btn').addEventListener('click', () => openPanel('food-panel'));
+  document.getElementById('add-food-btn').addEventListener('click', () => { resetFoodPanel(); openPanel('food-panel'); });
   document.getElementById('profile-btn').addEventListener('click', () => {
     populateProfilePanel(session.profile);
     openPanel('profile-panel');
