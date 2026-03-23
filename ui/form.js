@@ -196,8 +196,6 @@ export function initDrinkPanel(presets, getSession, setSession) {
  * @param {Function} setSession
  */
 export function initFoodPanel(getSession, setSession) {
-  _setDefaultTime('food-time');
-
   document.querySelectorAll('.meal-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.meal-btn').forEach(b => b.classList.remove('selected'));
@@ -338,6 +336,17 @@ export function openFoodPanelForEdit(food, index) {
   document.getElementById('food-save').textContent = 'Save Changes';
 
   openPanel('food-panel');
+}
+
+/**
+ * Reset the food panel to "Add" mode (call before opening it normally).
+ */
+export function resetFoodPanel() {
+  _editingFoodIndex = null;
+  _selectedMeal     = null;
+  document.querySelectorAll('.meal-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('food-note').value = '';
+  _setDefaultTime('food-time');
 }
 
 /**
