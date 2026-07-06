@@ -115,21 +115,18 @@
           </label>
         </div>
         <div class="form-row">
-          <label>Time started
+          <label>Started
             <input type="time" id="drink-time" aria-label="Drink start time">
           </label>
-          <label>Duration (min)
-            <input type="number" id="drink-duration" min="0" max="180" value="15"
-                   aria-label="Custom duration in minutes">
+          <label>Finished
+            <input type="time" id="drink-end" aria-label="Drink finish time">
           </label>
         </div>
         <div id="duration-quick" class="quick-select" role="group"
              aria-label="Drinking duration quick select"></div>
+        <small id="drink-duration-readout" class="field-hint" aria-live="polite"></small>
         <label>
           <input type="checkbox" id="drink-carbonated"> Carbonated
-        </label>
-        <label>
-          <input type="checkbox" id="drink-with-food"> Eating alongside
         </label>
         <button id="drink-custom-cancel" class="btn btn-secondary">Back</button>
       </div>
@@ -233,7 +230,7 @@
             <input type="number" id="preset-edit-abv" min="0" max="100" step="0.1">
           </label>
         </div>
-        <label>Duration (min)
+        <label>Typical duration (min)
           <input type="number" id="preset-edit-duration" min="0" max="180">
         </label>
         <label>

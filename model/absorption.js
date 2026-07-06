@@ -28,6 +28,40 @@ export function ethanolG(volume_ml, abv_pct) {
   return volume_ml * (abv_pct / 100) * ETHANOL_DENSITY;
 }
 
+// ─── Drinking duration ─────────────────────────────────────────────────────────
+
+/**
+ * Effective drinking duration (minutes) for a drink record.
+ *
+ * The app records each drink as a start time (`time_min`) and a finish time
+ * (`end_min`) — both clock minutes-from-midnight — because a finish time is far
+ * easier to read off a clock than a duration is to estimate.  The pharmacokinetic
+ * model, however, works in terms of duration, so this helper derives it:
+ *
+ *   duration = (end_min − time_min) wrapped into [0, 1440)
+ *
+ * The wrap makes the result correct even when the drink spans midnight or when
+ * the caller has shifted `time_min` past 1440 to keep an after-midnight timeline
+ * monotonic (see index.js _normalizeTimes) — only the scalar gap matters.
+ *
+ * A gap above 12 h is treated as a data error (or an open-ended "still drinking"
+ * record) and collapsed to 0 (instantaneous) rather than producing an absurd
+ * multi-hour ramp.
+ *
+ * Falls back to a legacy `duration_min` field for drinks saved before the
+ * start/end model, and to 0 when neither is present.
+ *
+ * @param {{ time_min?: number, end_min?: number, duration_min?: number }} drink
+ * @returns {number} minutes
+ */
+export function drinkDurationMin(drink) {
+  if (typeof drink.end_min === 'number' && typeof drink.time_min === 'number') {
+    const d = (((drink.end_min - drink.time_min) % 1440) + 1440) % 1440;
+    return d > 720 ? 0 : d;
+  }
+  return drink.duration_min ?? 0;
+}
+
 // ─── Base absorption time ──────────────────────────────────────────────────────
 
 /**

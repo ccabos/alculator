@@ -1,8 +1,19 @@
 # Alculator — Blood Alcohol Content Tracker
-## Requirements Specification v2.4
-*Date: 2026-02-23 | Supersedes v2.3*
+## Requirements Specification v2.5
+*Date: 2026-07-06 | Supersedes v2.4*
 
 ---
+
+## Changelog (v2.4 → v2.5)
+
+| Change | Reason |
+|--------|--------|
+| Drinks record a **finish time** (`end_min`), not a duration (§4.9) | A finish time is a clock glance; a duration is a mental subtraction. The absorption model still consumes a duration, derived as `end_min − time_min` (wrapped for past-midnight). Legacy `duration_min` is still accepted. |
+| One-tap preset logging back-dates the start (§4.10) | Logging a preset sets `end = now` and `start = now − typical_duration`, matching the moment users actually log (just finished a drink) with zero time entry. |
+| Michaelis-Menten `Km` lowered 0.015 % → 0.005 % (FR-35) | The old Km put half-saturation in the middle of the social-drinking range, so the model eliminated at only ~67–84 % of β_max at 0.03–0.08 % BAC — slower than the advertised 0.015 %/h. A small Km keeps elimination effectively zero-order across the social range while still softening in the low-BAC tail, matching RESEARCH.md §3.1. Shifts all reference peaks down (e.g. fasted 3-wine 0.0524 → 0.0451 %). |
+| Per-drink food flag `ethanol_factor` raised 0.85 → 0.93 | The 0.85 fallback cut the dose more than any real logged meal (heavy_meal = 0.90) — backwards for a coarse approximation. |
+| Per-drink "Eating alongside" checkbox and the global toggle (FR-19) removed from the UI | Food is now logged only as a first-class event, removing a confusing, mis-parameterised second mechanism. The `with_food` flag remains supported in the model for backward-compatible sessions. |
+| Carbonation toggle hidden when editing a preset-derived drink | Carbonation is intrinsic to a preset's drink type; exposing it per-log invited contradictory entries. |
 
 ## Changelog (v2.3 → v2.4)
 
@@ -142,7 +153,7 @@ larger systematic error for non-average body types.
 | FR-16 | One tap / click shall be sufficient to log a preset drink with default values |
 | FR-17 | Each drink log entry shall carry a **carbonated** flag (defaults: champagne = true, all others = false) |
 | FR-18 | The user shall be able to mark a drink entry as **consumed with food** (quick fallback when no food log entry covers the drink; see §4.9) |
-| FR-19 | A global **"eating alongside drinks"** toggle shall apply the food modifier to all newly logged drinks that are not already covered by a food log event |
+| FR-19 | *(Removed in v2.5)* The global **"eating alongside drinks"** toggle and per-drink food checkbox have been withdrawn; food is logged only as a first-class food event. The `with_food` flag is still honoured by the model for backward-compatible sessions but is no longer settable from the UI. |
 
 **Preset drink reference values:**
 
@@ -221,7 +232,7 @@ extension. The resolution order mirrors FR-30:
 | Food source | `ethanol_factor_i` |
 |---|---|
 | No food | 1.00 (no reduction) |
-| Per-drink food flag only | 0.85 (15 % reduction) |
+| Per-drink food flag only (legacy) | 0.93 (7 % reduction — kept no more protective than a real logged meal) |
 | Food log — Snack | 0.97 (3 % reduction — incremental FPM) |
 | Food log — Light meal | 0.95 (5 % reduction — incremental FPM) |
 | Food log — Full meal | 0.92 (8 % reduction — incremental FPM) |
@@ -241,7 +252,7 @@ If multiple food log events cover the same drink, the one with the **lowest**
 | ID | Requirement |
 |----|-------------|
 | FR-34 | Elimination shall follow **Michaelis-Menten kinetics**: `β_eff = β_max × BAC / (BAC + Km)` |
-| FR-35 | Default maximum elimination rate β_max = **0.015 % per hour**; Michaelis-Menten constant Km = **0.015 %** |
+| FR-35 | Default maximum elimination rate β_max = **0.015 % per hour**; Michaelis-Menten constant Km = **0.005 %** (small, so elimination is effectively zero-order across the social-drinking range and only softens in the low-BAC tail) |
 | FR-36 | Elimination shall run concurrently with absorption from the first minute of the simulation |
 | FR-37 | BAC shall be computed incrementally: `BAC[t] = max(0, BAC[t−1] + ΔBAC_abs − ΔBAC_elim)` where ΔBAC_elim = β_eff(BAC[t−1]) / 60 per minute |
 
@@ -260,7 +271,7 @@ zero-order produce nearly identical results. See ABSORPTION_MODEL.md §2.4.
 ```
 Constants:
   β_max  = 0.015     (%/h — maximum elimination rate at ADH saturation)
-  Km     = 0.015     (% — half-saturation constant)
+  Km     = 0.005     (% — half-saturation constant)
 
 For each drink i at time t_i with volume V_i (mL) and ABV_i:
   ethanol_g_i       = V_i × ABV_i/100 × 0.789         (ethanol density 0.789 g/mL)
@@ -273,8 +284,8 @@ For each drink i at time t_i with volume V_i (mL) and ABV_i:
       best            = event in covering_events with lowest ethanol_factor
       ethanol_factor_i = best.ethanol_factor
       T_absorb_i      = best.T_absorb          (food dominates; carbonation ignored)
-    elif drink.with_food:
-      ethanol_factor_i = 0.85
+    elif drink.with_food:            # legacy per-drink flag; new drinks don't set it
+      ethanol_factor_i = 0.93
       T_absorb_i      = 45 min if carbonated else 90 min
     else:
       ethanol_factor_i = 1.00
@@ -486,9 +497,8 @@ If no food log event covers a drink, the per-drink flag applies (FR-30).
       "volume_ml": 330,
       "abv_pct": 5.0,
       "logged_at": "2026-02-22T19:30:00Z",
-      "duration_min": 20,
-      "carbonated": false,
-      "with_food": false
+      "ended_at": "2026-02-22T19:50:00Z",
+      "carbonated": false
     }
   ],
   "food_events": [
@@ -503,7 +513,17 @@ If no food log event covers a drink, the per-drink flag applies (FR-30).
 ```
 
 Valid `meal_size` values: `"snack"`, `"light_meal"`, `"full_meal"`, `"heavy_meal"`.
-Valid `duration_min` range: integer ≥ 0. Sessions exported before v2.4 that lack this field shall be imported with `duration_min = 0`.
+
+**Drinking window.** A drink records a **start time** (`time_min` in the persisted
+localStorage format; `logged_at` above) and a **finish time** (`end_min` /
+`ended_at`). The drinking **duration** consumed by the absorption model is
+derived as `end_min − time_min`, wrapped into `[0, 1440)` so it stays correct
+across midnight. A finish time is far easier for the user to read off a clock
+than a duration is to estimate, so the UI records the finish time and shows the
+derived duration read-only. Sessions exported before this change may instead
+carry a legacy `duration_min` (integer ≥ 0); such drinks are accepted and the
+model falls back to `duration_min` when no `end_min` is present. A drink with
+neither field is treated as instantaneous (duration 0).
 
 ---
 
@@ -629,8 +649,8 @@ deleted (only hidden).
 
 | Test | Scenario | Expected |
 |------|----------|----------|
-| Same drink with and without food flag | food flag set, no covering food event | effective ethanol = 85 % of non-food value |
-| Food flag + carbonated | both set, no covering food event | T_absorb = 45 min; ethanol_factor = 0.85 |
+| Same drink with and without food flag | food flag set, no covering food event | effective ethanol = 93 % of non-food value |
+| Food flag + carbonated | both set, no covering food event | T_absorb = 45 min; ethanol_factor = 0.93 |
 
 #### Food log — coverage window (Case A / Case B)
 

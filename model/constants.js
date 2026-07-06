@@ -63,13 +63,25 @@ export const BETA_MAX = 0.015;
  * ADH half-saturation constant (Km): the BAC at which elimination rate equals
  * β_max / 2.  Below this BAC, ADH is undersaturated and elimination slows
  * dramatically (first-order / Michaelis-Menten regime).
+ *
+ * Chosen deliberately small (0.005 % ≈ 5 mg/dL) so the first-order softening is
+ * confined to the genuinely low-BAC tail, as the enzyme-kinetics literature
+ * describes: RESEARCH.md §3.1 states ADH is already saturated above
+ * ~0.015–0.020 % and only turns first-order *below* ~0.010–0.020 %.  A larger
+ * Km (an earlier draft used 0.015 %) pushed half-saturation into the middle of
+ * the social-drinking range, so the model eliminated at only ~67–84 % of β_max
+ * at 0.03–0.08 % BAC — systematically slower than the 0.015 %/h rate the manual
+ * and research advertise.  With Km = 0.005 %, elimination is ≥ ~86 % of β_max by
+ * 0.03 % BAC (effectively zero-order across the social range) while still
+ * tapering smoothly to zero as BAC → 0, which prevents the incremental
+ * integrator from clamping BAC at zero during slow, food-delayed absorption.
  * @type {number}
- * @unit % BAC   (≈ 10–15 mg/dL)
+ * @unit % BAC   (≈ 5 mg/dL)
  * @see RESEARCH.md §3.1 ("Only at very low BAC < 10–20 mg/dL does the enzyme
- *      become unsaturated"); Norberg et al. 2003
+ *      become unsaturated"); Norberg et al. 2003; ABSORPTION_MODEL.md §2.4
  * @update Requires new ADH enzyme-kinetics data; rarely revised.
  */
-export const KM = 0.015;
+export const KM = 0.005;
 
 // ─── Absorption model ──────────────────────────────────────────────────────────
 
@@ -120,8 +132,18 @@ export const WIDMARK_R = Object.freeze({ male: 0.68, female: 0.55 });
  * T_absorb.normal     — absorption window for non-carbonated drinks with food
  * T_absorb.carbonated — absorption window for carbonated drinks with food
  *                       (food overrides the carbonation acceleration)
- * ethanol_factor      — dose multiplier representing first-pass metabolism;
- *                       the remaining peak reduction comes from slower T_absorb
+ * ethanol_factor      — dose multiplier representing incremental first-pass
+ *                       metabolism; the remaining peak reduction comes from the
+ *                       slower T_absorb (same design as FOOD_PARAMS)
+ *
+ * This flag is a coarse "some food in the stomach" fallback used only when a
+ * drink carries a legacy `with_food` marker but no timestamped food-log event
+ * covers it.  Its ethanol_factor is kept no more protective than a real logged
+ * meal: 0.93 sits between light_meal (0.95) and full_meal (0.92) and is above
+ * heavy_meal (0.90).  An earlier draft used 0.85, which made this rough
+ * fallback cut the dose *more* than any actual meal event — backwards for an
+ * approximation.  New drinks no longer set this flag (food is logged as a
+ * first-class event); it survives only for backward-compatible sessions.
  *
  * @type {{ T_absorb: { normal: number, carbonated: number }, ethanol_factor: number }}
  * @see REQUIREMENTS.md §4.3.2 FR-30–32; RESEARCH.md §1.3
@@ -129,7 +151,7 @@ export const WIDMARK_R = Object.freeze({ male: 0.68, female: 0.55 });
  */
 export const WITH_FOOD_FLAG = Object.freeze({
   T_absorb: { normal: 90, carbonated: 45 },
-  ethanol_factor: 0.85,
+  ethanol_factor: 0.93,
 });
 
 // ─── Meal-size food parameters ────────────────────────────────────────────────
@@ -221,10 +243,12 @@ export const SOBER_THRESHOLD = 0.001;
  * Each preset has a stable `id` that must not be changed once shipped (renaming
  * an id would orphan user customisations stored in localStorage that reference it).
  *
- * duration_min: the typical time a person takes to finish this drink, used by the
+ * duration_min: the typical time a person takes to finish this drink.  When a
+ *   preset is logged with one tap, this is used to derive the drink's start/end
+ *   times (start = now − duration_min, end = now), which in turn feed the
  *   closed-form convolution model (model/absorption.js absorptionFraction).
- *   The user can override this at logging time.  0 means "instantaneous" (legacy
- *   behaviour, but no drink is really instantaneous — 0 is reserved for shots).
+ *   The user can adjust the start/end times at logging time.  0 means
+ *   "instantaneous" (reserved for shots).
  *
  * @type {ReadonlyArray<{id:string, name:string, volume_ml:number, abv_pct:number,
  *                       carbonated:boolean, duration_min:number}>}

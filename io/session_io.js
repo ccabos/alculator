@@ -56,7 +56,12 @@ export function validateSchema(obj) {
         errors.push(`drinks[${i}].volume_ml must be a positive number`);
       if (typeof d.abv_pct !== 'number' || d.abv_pct < 0 || d.abv_pct > 100)
         errors.push(`drinks[${i}].abv_pct must be in [0, 100]`);
-      if (typeof d.duration_min !== 'number' || d.duration_min < 0)
+      // Drinking window: the current model records a finish time (end_min); a
+      // legacy duration_min is still accepted.  Neither is strictly required
+      // (absence ⇒ instantaneous), but if present they must be well-formed.
+      if (d.end_min != null && typeof d.end_min !== 'number')
+        errors.push(`drinks[${i}].end_min must be a number`);
+      if (d.duration_min != null && (typeof d.duration_min !== 'number' || d.duration_min < 0))
         errors.push(`drinks[${i}].duration_min must be a non-negative number`);
     }
   }
@@ -87,7 +92,7 @@ export function validateSchema(obj) {
  *   schema:      "alculator-session-v2",
  *   exported_at: ISO-8601 timestamp,
  *   profile:     { sex, weight_kg, age, height_cm? },
- *   drinks:      [{ time_min, volume_ml, abv_pct, carbonated, with_food, duration_min, ... }],
+ *   drinks:      [{ time_min, end_min, volume_ml, abv_pct, carbonated, ... }],
  *   food_events: [{ time_min, type }]
  * }
  *
