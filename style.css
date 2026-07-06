@@ -509,6 +509,12 @@ label.toggle-label { flex-direction: row; align-items: center; }
   color: #fff;
   border-color: var(--c-primary);
 }
+.field-hint {
+  display: block;
+  color: var(--c-muted);
+  font-size: 0.8rem;
+  margin-bottom: 0.5rem;
+}
 
 /* ── Chart tooltip ───────────────────────────────────────────────────────────── */
 #chart-tooltip {

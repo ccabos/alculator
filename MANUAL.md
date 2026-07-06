@@ -127,14 +127,23 @@ For anything not in the preset list:
 
 ### Adjusting the time
 
-If you had a drink 20 minutes ago and forgot to log it:
+When you tap a preset, Alculator assumes you have **just finished** the drink: it
+sets the **Finished** time to now and back-dates the **Started** time by the
+drink's typical drinking duration. That is usually exactly right and needs no
+adjustment.
 
-1. Tap **+ Add drink**, choose the drink.
-2. Tap the **time stamp** field (shows "now" by default).
-3. Adjust to the actual time you drank it.
-4. Tap **Log drink**.
+If you want to correct it (for a custom drink, or one you finished a while ago):
 
-The BAC curve will immediately reflect the corrected time.
+1. Tap **+ Add drink**, choose the drink, then tap it in the log to edit.
+2. Set **Started** and/or **Finished** — both are ordinary clock times.
+3. Alculator shows the resulting duration ("Drunk over ~20 min") beneath the
+   fields, and offers quick buttons (5/10/15/… min) that set the finish time
+   relative to the start.
+4. Tap **Save changes**.
+
+The BAC curve reflects the corrected times immediately. Recording a **finish
+time** rather than a duration is deliberate — the finish time is just a glance at
+the clock, whereas "how many minutes did that take?" is a guess.
 
 ---
 
@@ -293,8 +302,9 @@ order. This gives you a single complete timeline of the evening at a glance.
 
 ### Editing an entry
 
-Tap any log entry to open it. For a drink you can change the timestamp, volume,
-ABV, or carbonation flag. For a food event you can change the timestamp or meal
+Tap any log entry to open it. For a drink you can change the start and finish
+times, volume, and ABV (carbonation is fixed for preset drink types and editable
+only for custom drinks). For a food event you can change the timestamp or meal
 size. Changes take effect immediately and the BAC curve recalculates.
 
 ### Deleting an entry
@@ -395,14 +405,13 @@ shows a tooltip with the meal size, time, and number of drinks affected.
 You can see the difference a meal makes by logging a food event and watching
 the BAC curve flatten and shift right in real time.
 
-### The "Eating alongside drinks" quick toggle
+### Logging food as an event
 
-For quick logging without creating a food event, you can tap the
-**fork-and-knife icon** on the main screen to enable "Eating alongside drinks"
-mode. While active, any newly logged drink that is not already covered by a food
-log event will receive the basic per-drink food modifier: a 90-minute absorption
-window and 15 % ethanol reduction. This is a rough approximation; for accuracy,
-log a food event instead.
+Food is always logged as a **food event** (via **+ Add food**), which Alculator
+matches to the drinks it actually overlaps using the coverage rules above. There
+is no separate per-drink "eating" checkbox — a single, timestamped food event is
+both simpler and more accurate, because it knows *when* you ate and therefore
+which drinks it can affect.
 
 ### Carbonation and food together
 

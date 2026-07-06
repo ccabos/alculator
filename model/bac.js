@@ -10,7 +10,7 @@
  */
 
 import { SOBER_THRESHOLD, UNCERTAINTY_CV } from './constants.js';
-import { ethanolG, absorptionFraction, resolveModifiers } from './absorption.js';
+import { ethanolG, absorptionFraction, resolveModifiers, drinkDurationMin } from './absorption.js';
 import { eliminationStep } from './elimination.js';
 import { computeR } from './profile.js';
 
@@ -31,9 +31,11 @@ import { computeR } from './profile.js';
  *   volume_ml:   number,
  *   abv_pct:     number,
  *   carbonated:  boolean,
- *   with_food:   boolean,
+ *   with_food?:  boolean,
+ *   end_min?:    number,
  *   duration_min?: number
- * }>} drinks
+ * }>} drinks  — each drink's drinking duration is derived from end_min − time_min
+ *   (see drinkDurationMin); duration_min is accepted as a legacy fallback.
  * @param {Array<{ time_min: number, type: string }>} food_events
  * @param {{ sex: 'male'|'female', weight_kg: number, height_cm?: number, age?: number }} profile
  * @param {number} t_start_min  — first minute in the series (inclusive)
@@ -61,7 +63,7 @@ export function bacSeries(drinks, food_events, profile, t_start_min, t_end_min, 
     );
     return {
       time_min:      d.time_min,
-      duration_min:  d.duration_min ?? 0,
+      duration_min:  drinkDurationMin(d),
       ethanol_g:     ethanolG(d.volume_ml, d.abv_pct),
       T_absorb,
       ethanol_factor,

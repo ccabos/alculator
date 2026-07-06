@@ -7,7 +7,7 @@ Profile used throughout:
   Male, 70 kg, 175 cm, age 30
   r (Seidl) = 0.32 - 0.0048*70 + 0.0046*175 = 0.789
   β_max = 0.015 %/h   (maximum elimination rate)
-  Km    = 0.015 %      (ADH half-saturation constant)
+  Km    = 0.005 %      (ADH half-saturation constant)
 
 Standard drink in most examples: wine 150 mL, 12 % ABV
   ethanol = 150 * 0.12 * 0.789 = 14.202 g
@@ -27,7 +27,7 @@ WEIGHT_KG = 70
 HEIGHT_CM = 175
 R_SEIDL   = 0.32 - 0.0048 * WEIGHT_KG + 0.0046 * HEIGHT_CM   # 0.789
 BETA_MAX  = 0.015          # % BAC per hour, maximum elimination rate
-KM        = 0.015          # % BAC, Michaelis-Menten half-saturation constant
+KM        = 0.005          # % BAC, Michaelis-Menten half-saturation constant
 
 ETHANOL_DENSITY = 0.789     # g / mL
 
@@ -86,7 +86,7 @@ def resolve_modifiers(drink_time_min, carbonated, food_events, with_food_flag=Fa
         return best["T_absorb"], best["ethanol_factor"]
 
     if with_food_flag:
-        return (45 if carbonated else 90), 0.85
+        return (45 if carbonated else 90), 0.93
 
     return tb, 1.00
 
@@ -416,7 +416,7 @@ def make_svg(series, drinks, food_events, title, filename, extra_series=None,
     parts.append(
         f'<text x="{ML+PW}" y="{MT+10}" fill="#6b7280" font-size="9" '
         f'text-anchor="end">Profile: male, 70 kg, 175 cm \u00b7 r=0.789 '
-        f'\u00b7 \u03b2\u2098\u2090\u2093=0.015 %/h \u00b7 K\u2098=0.015 %</text>'
+        f'\u00b7 \u03b2\u2098\u2090\u2093=0.015 %/h \u00b7 K\u2098=0.005 %</text>'
     )
 
     svg = (

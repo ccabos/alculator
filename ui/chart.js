@@ -18,6 +18,7 @@
 
 import { uncertaintyBounds } from '../model/bac.js';
 import { BAC_THRESHOLDS }    from '../model/constants.js';
+import { drinkDurationMin }  from '../model/absorption.js';
 
 // ─── Layout constants ──────────────────────────────────────────────────────────
 
@@ -171,7 +172,7 @@ export function renderChart(series, drinks, food_events, now_min) {
       stroke="#2563eb" stroke-width="2"/>`);
 
     // Duration triangle: left base at drink start, right tip at drink end
-    const dur = d.duration_min ?? 0;
+    const dur = drinkDurationMin(d);
     if (dur > 0) {
       const x_tip = Math.min(tx(d.time_min + dur), ML + PW);
       parts.push(`<polygon points="${x},${TRI_TOP} ${x},${TRI_BOT} ${x_tip},${TRI_MID}"

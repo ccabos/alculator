@@ -12,6 +12,7 @@
  */
 
 import { bacSeries, findSoberTime, uncertaintyBounds } from './model/bac.js';
+import { drinkDurationMin } from './model/absorption.js';
 import { loadSession, saveSession, clearSession }       from './store/session.js';
 import { exportJSON, importJSON }                       from './io/session_io.js';
 import { loadPresets }                                  from './store/presets.js';
@@ -230,22 +231,33 @@ function _deleteFood(index) {
 /**
  * Apply a drag-gesture delta to a drink's start time and/or drinking duration.
  *
+ * Horizontal drag shifts the start time (carrying the finish time with it so the
+ * duration is preserved); vertical drag lengthens/shortens the drinking window
+ * by moving only the finish time.  Both are expressed by rewriting end_min.
+ *
  * @param {number} index         — index into session.drinks
- * @param {number} dtTimeMins    — minutes to add to time_min (negative = earlier)
- * @param {number} dtDurMins     — minutes to add to duration_min (negative = shorter)
+ * @param {number} dtTimeMins    — minutes to add to the start time (negative = earlier)
+ * @param {number} dtDurMins     — minutes to add to the duration (negative = shorter)
  */
 function _gestureDrink(index, dtTimeMins, dtDurMins) {
   const drink = session.drinks[index];
   if (!drink) return;
-  const updated = {
-    ...drink,
-    time_min:     _wrapMin(drink.time_min     + dtTimeMins),
-    duration_min: Math.max(0, Math.min(180, (drink.duration_min ?? 0) + dtDurMins)),
-  };
-  const drinks = session.drinks.map((d, i) => i === index ? updated : d);
+  const drinks = session.drinks.map((d, i) => i === index ? _applyDrinkDelta(d, dtTimeMins, dtDurMins) : d);
   session = { ...session, drinks };
   saveSession(session);
   redraw();
+}
+
+/**
+ * Return a copy of a drink with a start/duration drag delta applied, expressed
+ * as time_min + end_min.  Drops any legacy duration_min field.
+ */
+function _applyDrinkDelta(drink, dtTimeMins, dtDurMins) {
+  const curDur   = drinkDurationMin(drink);
+  const newStart = _wrapMin(drink.time_min + dtTimeMins);
+  const newDur   = Math.max(0, Math.min(180, curDur + dtDurMins));
+  const { duration_min, ...rest } = drink;
+  return { ...rest, time_min: newStart, end_min: _wrapMin(newStart + newDur) };
 }
 
 function _gestureFood(index, dtTimeMins) {
@@ -279,11 +291,7 @@ function _liveChartUpdate(index, dtTimeMins, dtDurMins) {
   const drink = session.drinks[index];
   if (!drink) return;
 
-  const tempDrink = {
-    ...drink,
-    time_min:     _wrapMin(drink.time_min + dtTimeMins),
-    duration_min: Math.max(0, Math.min(180, (drink.duration_min ?? 0) + dtDurMins)),
-  };
+  const tempDrink  = _applyDrinkDelta(drink, dtTimeMins, dtDurMins);
   const tempDrinks = session.drinks.map((d, i) => i === index ? tempDrink : d);
 
   const { drinks: nDrinks, food_events: nFood, now_min } =

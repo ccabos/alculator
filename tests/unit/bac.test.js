@@ -46,6 +46,17 @@ describe('bacSeries', () => {
     expect(sober).not.toBeNull();
     expect(sober).toBeGreaterThan(0);
   });
+
+  it('§6.1: a drink given by end_min matches the same drink given by legacy duration_min', () => {
+    const base = { volume_ml: 150, abv_pct: 12, carbonated: false };
+    const viaEnd      = [{ ...base, time_min: 60, end_min: 90 }];      // 30-min window
+    const viaDuration = [{ ...base, time_min: 60, duration_min: 30 }]; // legacy field
+    const a = bacSeries(viaEnd,      [], PROFILE, 0, 300);
+    const b = bacSeries(viaDuration, [], PROFILE, 0, 300);
+    for (let i = 0; i < a.length; i++) {
+      expect(a[i].bac_pct).toBeCloseTo(b[i].bac_pct, 12);
+    }
+  });
 });
 
 // ─── uncertaintyBounds ────────────────────────────────────────────────────────

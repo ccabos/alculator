@@ -8,9 +8,8 @@
  */
 
 import { DURATION_QUICK_SELECT_MIN, DEFAULT_DRINK_PRESETS } from '../model/constants.js';
+import { drinkDurationMin } from '../model/absorption.js';
 import { loadPresets, savePreset, deletePreset, resetPresets } from '../store/presets.js';
-
-const BEER_PRESET_IDS = new Set(['beer_regular', 'beer_pint']);
 import { saveSession } from '../store/session.js';
 
 // ─── Module state ──────────────────────────────────────────────────────────────
@@ -79,11 +78,16 @@ export function renderPresetGrid(presets, onSelect) {
 
 /**
  * Render the drinking-duration quick-select buttons.
- * Syncs selection with the numeric input.
+ *
+ * The drink form records a start time and a finish time (not a duration — a
+ * finish time is easier to read off a clock).  Each quick-select button is a
+ * shortcut that sets the finish time to `start + N minutes`.  Editing either
+ * time input re-derives the duration and re-highlights the matching button.
  */
 export function renderDurationQuickSelect() {
-  const container  = document.getElementById('duration-quick');
-  const durationIn = document.getElementById('drink-duration');
+  const container = document.getElementById('duration-quick');
+  const startIn   = document.getElementById('drink-time');
+  const endIn     = document.getElementById('drink-end');
 
   container.innerHTML = DURATION_QUICK_SELECT_MIN.map(d =>
     `<button type="button" class="quick-btn" data-val="${d}">${d} min</button>`
@@ -91,17 +95,37 @@ export function renderDurationQuickSelect() {
 
   container.querySelectorAll('.quick-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      container.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-      durationIn.value = btn.dataset.val;
+      const start = _timeToMin(startIn.value);
+      const dur   = parseInt(btn.dataset.val, 10) || 0;
+      endIn.value = _minToTime(_wrapMin(start + dur));
+      _syncDurationUI();
     });
   });
 
-  // Keep quick-select in sync when user types manually
-  durationIn.addEventListener('input', () => {
-    container.querySelectorAll('.quick-btn').forEach(btn => {
-      btn.classList.toggle('selected', btn.dataset.val === durationIn.value);
-    });
+  // Keep the derived-duration readout and button highlight in sync when the
+  // user edits either time field directly.
+  startIn.addEventListener('input', _syncDurationUI);
+  endIn.addEventListener('input', _syncDurationUI);
+}
+
+/** Duration (minutes) implied by the current start/finish inputs. */
+function _durationFromInputs() {
+  const start = _timeToMin(document.getElementById('drink-time').value);
+  const end   = _timeToMin(document.getElementById('drink-end').value);
+  return _wrapMin(end - start);
+}
+
+/** Refresh the duration readout text and the quick-select highlight. */
+function _syncDurationUI() {
+  const dur     = _durationFromInputs();
+  const readout = document.getElementById('drink-duration-readout');
+  if (readout) {
+    readout.textContent = dur === 0 ? 'Instantaneous (0 min)'
+                        : dur > 720 ? 'Check the finish time'
+                        : `Drunk over ~${dur} min`;
+  }
+  document.querySelectorAll('#duration-quick .quick-btn').forEach(btn => {
+    btn.classList.toggle('selected', Number(btn.dataset.val) === dur);
   });
 }
 
@@ -117,13 +141,18 @@ export function renderDurationQuickSelect() {
  */
 export function initDrinkPanel(presets, getSession, setSession) {
   _presetSelectCallback = preset => {
+    // One-tap logging: assume the drink was just finished (end = now) and
+    // back-date its start by the preset's typical duration.  Both the natural
+    // moment to log and the only clock reading the user has is "now".
+    const now = _nowMin();
+    const dur = preset.duration_min ?? 0;
     _saveDrink({
-      preset_id:    preset.id,
-      volume_ml:    preset.volume_ml,
-      abv_pct:      preset.abv_pct,
-      carbonated:   preset.carbonated,
-      with_food:    false,
-      duration_min: preset.duration_min,
+      preset_id:  preset.id,
+      volume_ml:  preset.volume_ml,
+      abv_pct:    preset.abv_pct,
+      carbonated: preset.carbonated,
+      time_min:   _wrapMin(now - dur),
+      end_min:    now,
     }, getSession, setSession);
     closePanel('drink-panel');
   };
@@ -141,7 +170,11 @@ export function initDrinkPanel(presets, getSession, setSession) {
     customForm.hidden = false;
     presetGrid.hidden = true;
     customBtn.hidden  = true;
-    _setDefaultTime('drink-time');
+    // Default to a drink just finished, drunk over ~15 min.
+    const now = _nowMin();
+    document.getElementById('drink-time').value = _minToTime(_wrapMin(now - 15));
+    document.getElementById('drink-end').value  = _minToTime(now);
+    _syncDurationUI();
   });
   cancelBtn.addEventListener('click', () => {
     _editingDrinkIndex    = null;
@@ -158,10 +191,9 @@ export function initDrinkPanel(presets, getSession, setSession) {
   document.getElementById('drink-custom-save').addEventListener('click', () => {
     const volume    = parseFloat(document.getElementById('drink-volume').value);
     const abv       = parseFloat(document.getElementById('drink-abv').value);
-    const duration  = parseInt(document.getElementById('drink-duration').value, 10) || 0;
     const carbonated = document.getElementById('drink-carbonated').checked;
-    const with_food  = document.getElementById('drink-with-food').checked;
-    const timeVal    = document.getElementById('drink-time').value;
+    const startVal   = document.getElementById('drink-time').value;
+    const endVal     = document.getElementById('drink-end').value;
 
     if (!volume || !abv || isNaN(volume) || isNaN(abv)) {
       alert('Please enter a valid volume and ABV.');
@@ -177,12 +209,11 @@ export function initDrinkPanel(presets, getSession, setSession) {
 
     _saveDrink({
       ...(presetId ? { preset_id: presetId } : {}),
-      volume_ml:    volume,
-      abv_pct:      abv,
+      volume_ml:  volume,
+      abv_pct:    abv,
       carbonated,
-      with_food,
-      duration_min: duration,
-      time_min:     _timeToMin(timeVal),
+      time_min:   _timeToMin(startVal),
+      end_min:    _timeToMin(endVal),
     }, getSession, setSession, editIdx);
     closePanel('drink-panel');
   });
@@ -290,21 +321,19 @@ export function openDrinkPanelForEdit(drink, index) {
   document.getElementById('drink-custom-btn').hidden   = true;
 
   // Pre-fill fields
-  document.getElementById('drink-volume').value     = drink.volume_ml;
-  document.getElementById('drink-abv').value        = drink.abv_pct;
-  document.getElementById('drink-duration').value   = drink.duration_min ?? 0;
+  const dur = drinkDurationMin(drink);
+  document.getElementById('drink-volume').value       = drink.volume_ml;
+  document.getElementById('drink-abv').value          = drink.abv_pct;
   document.getElementById('drink-carbonated').checked = !!drink.carbonated;
-  document.getElementById('drink-with-food').checked  = !!drink.with_food;
+  document.getElementById('drink-time').value         = _minToTime(drink.time_min);
+  document.getElementById('drink-end').value          = _minToTime(_wrapMin(drink.time_min + dur));
 
-  // Hide carbonated option for beer presets (carbonation is fixed)
-  document.getElementById('drink-carbonated').closest('label').hidden =
-    BEER_PRESET_IDS.has(drink.preset_id);
-  document.getElementById('drink-time').value       = _minToTime(drink.time_min);
+  // Carbonation is intrinsic to a preset's drink type, so only expose the
+  // toggle for genuinely custom drinks (no preset_id).
+  document.getElementById('drink-carbonated').closest('label').hidden = !!drink.preset_id;
 
-  // Sync duration quick-select buttons
-  document.querySelectorAll('#duration-quick .quick-btn').forEach(btn => {
-    btn.classList.toggle('selected', btn.dataset.val === String(drink.duration_min ?? 0));
-  });
+  // Refresh the derived-duration readout and quick-select highlight.
+  _syncDurationUI();
 
   // Update panel title and save button
   document.querySelector('#drink-panel .panel-header h2').textContent = 'Edit Drink';
@@ -526,6 +555,9 @@ function _setDefaultTime(inputId) {
   const mm = String(d.getMinutes()).padStart(2, '0');
   document.getElementById(inputId).value = `${hh}:${mm}`;
 }
+
+/** Wrap an absolute-minute value into the 0–1439 clock range. */
+function _wrapMin(t) { return ((t % 1440) + 1440) % 1440; }
 
 /** Parse HH:MM string to minutes from midnight. */
 function _timeToMin(timeStr) {

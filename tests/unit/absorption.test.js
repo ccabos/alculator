@@ -11,6 +11,7 @@ import {
   tBase,
   absorptionFraction,
   resolveModifiers,
+  drinkDurationMin,
 } from '../../model/absorption.js';
 import {
   ETHANOL_DENSITY,
@@ -48,6 +49,40 @@ describe('tBase', () => {
 
   it('returns T_BASE_CARBONATED for carbonated drinks', () => {
     expect(tBase(true)).toBe(T_BASE_CARBONATED);        // 20 min
+  });
+});
+
+// ─── drinkDurationMin — start/end derivation ───────────────────────────────────
+
+describe('drinkDurationMin', () => {
+  it('derives duration from end_min − time_min', () => {
+    expect(drinkDurationMin({ time_min: 1140, end_min: 1155 })).toBe(15);
+  });
+
+  it('wraps correctly when the drink spans midnight (end < start)', () => {
+    // 23:50 → 00:10 = 20 min
+    expect(drinkDurationMin({ time_min: 1430, end_min: 10 })).toBe(20);
+  });
+
+  it('recovers duration when time_min was shifted past 1440 (normalized timeline)', () => {
+    // start shifted +1440 (01:00 → 1500), end still a clock minute (01:15 = 75) → 15 min
+    expect(drinkDurationMin({ time_min: 1500, end_min: 75 })).toBe(15);
+  });
+
+  it('collapses an absurd (> 12 h) span to 0 rather than an enormous ramp', () => {
+    expect(drinkDurationMin({ time_min: 600, end_min: 0 })).toBe(0); // −10 h → wraps to 14 h → 0
+  });
+
+  it('end_min == time_min → 0 (instantaneous)', () => {
+    expect(drinkDurationMin({ time_min: 1200, end_min: 1200 })).toBe(0);
+  });
+
+  it('falls back to legacy duration_min when no end_min is present', () => {
+    expect(drinkDurationMin({ time_min: 1200, duration_min: 25 })).toBe(25);
+  });
+
+  it('returns 0 when neither end_min nor duration_min is present', () => {
+    expect(drinkDurationMin({ time_min: 1200 })).toBe(0);
   });
 });
 
@@ -195,16 +230,16 @@ describe('resolveModifiers — fasted defaults', () => {
 });
 
 describe('resolveModifiers — per-drink food flag (§6.1)', () => {
-  it('§6.1: food flag, non-carbonated → T_absorb = 90, factor = 0.85', () => {
+  it('§6.1: food flag, non-carbonated → T_absorb = 90, factor = 0.93', () => {
     const r = resolveModifiers(0, false, [], true);
     expect(r.T_absorb).toBe(WITH_FOOD_FLAG.T_absorb.normal);        // 90
-    expect(r.ethanol_factor).toBe(WITH_FOOD_FLAG.ethanol_factor);   // 0.85
+    expect(r.ethanol_factor).toBe(WITH_FOOD_FLAG.ethanol_factor);   // 0.93
   });
 
-  it('§6.1: food flag + carbonated → T_absorb = 45, factor = 0.85', () => {
+  it('§6.1: food flag + carbonated → T_absorb = 45, factor = 0.93', () => {
     const r = resolveModifiers(0, true, [], true);
     expect(r.T_absorb).toBe(WITH_FOOD_FLAG.T_absorb.carbonated);    // 45
-    expect(r.ethanol_factor).toBe(WITH_FOOD_FLAG.ethanol_factor);   // 0.85
+    expect(r.ethanol_factor).toBe(WITH_FOOD_FLAG.ethanol_factor);   // 0.93
   });
 });
 

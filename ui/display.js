@@ -8,6 +8,7 @@
  */
 
 import { BAC_THRESHOLDS } from '../model/constants.js';
+import { drinkDurationMin } from '../model/absorption.js';
 
 // ─── BAC display ──────────────────────────────────────────────────────────────
 
@@ -145,10 +146,11 @@ export function renderSessionLog(
       const d = ev.data;
       const preset = d.preset_id ? presetMap[d.preset_id] : null;
       const name = preset ? preset.name : 'Custom drink';
-      const meta = _buildDrinkMeta(d.volume_ml, d.abv_pct, d.duration_min, d.carbonated, d.with_food);
+      const dur  = drinkDurationMin(d);
+      const meta = _buildDrinkMeta(d.volume_ml, d.abv_pct, dur, d.carbonated, d.with_food);
 
       return `<div class="log-entry log-entry-drink" data-kind="drink" data-index="${ev.index}"
-              data-orig-time-min="${d.time_min}" data-orig-duration-min="${d.duration_min ?? 0}"
+              data-orig-time-min="${d.time_min}" data-orig-duration-min="${dur}"
               data-volume-ml="${d.volume_ml}" data-abv-pct="${d.abv_pct}"
               data-carbonated="${d.carbonated}" data-with-food="${d.with_food}"
               role="button" tabindex="0" aria-label="Edit ${esc(name)}">

@@ -1,6 +1,6 @@
 # Alculator — Absorption Model Explained
 
-*Version 1.0 — 2026-02-22*
+*Version 1.1 — 2026-07-06 (Km lowered 0.015 % → 0.005 %; peaks and tables recomputed)*
 
 This document describes the pharmacokinetic model used by Alculator to estimate
 Blood Alcohol Content (BAC) over time, explains the rationale behind each
@@ -211,6 +211,15 @@ Since 0.000193 < 0.000250, the absorption rate never exceeds the elimination
 rate. BAC remains clamped at zero — the model predicts you cannot become
 intoxicated from three glasses of wine with dinner. This is clearly wrong.
 
+The root cause is the incremental integrator's `max(0, …)` floor: it applies the
+full zero-order β to a body pool that is still filling slowly, and once BAC hits
+zero it cannot go negative even though unabsorbed ethanol is still arriving.
+Michaelis-Menten elimination fixes this because β_eff → 0 as BAC → 0, so the
+elimination term can never outrun a small absorption term near the origin — the
+enzyme is simply not saturated there, which is exactly the real biology
+(RESEARCH.md §3.1). It is the physiologically honest form of the "you can't
+eliminate ethanol that hasn't been absorbed yet" constraint.
+
 #### The Michaelis-Menten Solution
 
 The fix is to use the full Michaelis-Menten equation, which models the actual
@@ -223,20 +232,30 @@ enzyme kinetics:
 | Parameter | Value | Meaning |
 |-----------|-------|---------|
 | β_max | 0.015 %/h | Maximum elimination rate (same as classical β) |
-| Km | 0.015 % | BAC at which β_eff = β_max / 2 (half-saturation constant) |
+| Km | 0.005 % | BAC at which β_eff = β_max / 2 (half-saturation constant) |
 
-**Behaviour at different BAC levels:**
+**Choice of Km.** Km is deliberately small (0.005 % ≈ 5 mg/dL) so the first-order
+softening is confined to the genuinely low-BAC tail, matching the enzyme kinetics:
+RESEARCH.md §3.1 says ADH is already saturated above ~0.015–0.020 % and only turns
+first-order *below* ~0.010–0.020 %. An earlier draft used Km = 0.015 %, which put
+half-saturation in the middle of the social-drinking range and made the model
+eliminate at only ~67–84 % of β_max at 0.03–0.08 % BAC — systematically slower
+than the 0.015 %/h rate this document and RESEARCH.md advertise. With Km = 0.005 %,
+elimination is effectively zero-order across the social range yet still tapers to
+zero as BAC → 0.
+
+**Behaviour at different BAC levels (Km = 0.005 %):**
 
 | BAC | β_eff | % of β_max | Character |
 |-----|-------|------------|-----------|
-| 0.001 % | 0.0009 %/h | 6 % | Near-zero elimination — BAC can rise even with slow absorption |
-| 0.005 % | 0.0038 %/h | 25 % | Slow elimination |
-| 0.015 % (= Km) | 0.0075 %/h | 50 % | Half-maximal |
-| 0.050 % | 0.0115 %/h | 77 % | Approaching zero-order |
-| 0.080 % | 0.0126 %/h | 84 % | Effectively zero-order |
-| 0.150 % | 0.0136 %/h | 91 % | Fully saturated |
+| 0.001 % | 0.0025 %/h | 17 % | Near-zero elimination — BAC can rise even with slow absorption |
+| 0.005 % (= Km) | 0.0075 %/h | 50 % | Half-maximal |
+| 0.015 % | 0.0113 %/h | 75 % | Approaching zero-order |
+| 0.050 % | 0.0136 %/h | 91 % | Effectively zero-order |
+| 0.080 % | 0.0141 %/h | 94 % | Fully saturated |
+| 0.150 % | 0.0145 %/h | 97 % | Fully saturated |
 
-At social-drinking BAC levels (> 0.03 %), M-M elimination is already > 67 % of
+At social-drinking BAC levels (> 0.03 %), M-M elimination is already > 85 % of
 β_max, so results closely match the classical zero-order model. The difference
 only matters at low BAC — exactly where food-slowed absorption operates. This
 is directly supported by RESEARCH.md §3.1.
@@ -246,7 +265,7 @@ is directly supported by RESEARCH.md §3.1.
 Alculator computes BAC minute-by-minute using an incremental model:
 
 ```
-Km        = 0.015    (% BAC; ADH half-saturation constant)
+Km        = 0.005    (% BAC; ADH half-saturation constant)
 β_max     = 0.015    (%/h; maximum elimination rate at saturation)
 
 BAC[0]    = 0
@@ -466,7 +485,7 @@ All examples use the same profile:
 | Height | 175 cm |
 | r (Seidl) | 0.789 |
 | β_max | 0.015 %/h |
-| Km | 0.015 % |
+| Km | 0.005 % |
 
 Standard drink: 150 mL wine, 12 % ABV → 14.20 g ethanol.
 
@@ -493,25 +512,25 @@ BAC_single = 14.20 / (70 × 1000 × 0.789) × 100 = 0.0257 %
 | Time | BAC | What is happening |
 |------|-----|-------------------|
 | 19:00 | 0.000 % | Wine 1 starts absorbing |
-| 19:22 | 0.012 % | Wine 1 half-absorbed; M-M elimination still weak (β_eff ≈ 0.007 %/h) |
-| 19:45 | 0.023 % | Wine 1 fully absorbed; elimination ramping up |
-| 20:00 | 0.021 % | Wine 2 starts; Wine 1 declining |
-| 20:45 | 0.040 % | Wine 2 fully absorbed; cumulative rise |
-| 21:00 | 0.038 % | Wine 3 starts |
-| 21:45 | 0.052 % | **Peak BAC: 0.0524 %** — Wine 3 fully absorbed |
-| 23:00 | 0.037 % | Declining — elimination near β_max |
-| 01:30 | 0.000 % | Sober |
+| 19:22 | 0.010 % | Wine 1 half-absorbed; M-M elimination still weak (β_eff ≈ 0.010 %/h) |
+| 19:45 | 0.019 % | Wine 1 fully absorbed; elimination ramping up |
+| 20:00 | 0.016 % | Wine 2 starts; Wine 1 declining |
+| 20:45 | 0.033 % | Wine 2 fully absorbed; cumulative rise |
+| 21:00 | 0.029 % | Wine 3 starts |
+| 21:45 | 0.045 % | **Peak BAC: 0.0451 %** — Wine 3 fully absorbed |
+| 23:00 | 0.029 % | Declining — elimination near β_max |
+| 01:00 | 0.000 % | Sober |
 
 **Teaching point:** The curve shows a stepped rise (each wine adds ~0.02 %
 before elimination catches up) followed by a steady decline. The ±21 %
-uncertainty band is shown as the shaded region — at peak BAC of 0.052 %,
-the true BAC could plausibly be anywhere from 0.041 % to 0.063 %.
+uncertainty band is shown as the shaded region — at peak BAC of 0.045 %,
+the true BAC could plausibly be anywhere from 0.036 % to 0.055 %.
 
 ![Example 1 — Three wines, no food (baseline + uncertainty band)](images/ex1_fasted.svg)
 
-**Theory cross-reference:** The peak BAC of 0.052 % is consistent with three
+**Theory cross-reference:** The peak BAC of 0.045 % is consistent with three
 standard drinks in a 70 kg male. At peak, M-M elimination operates at
-β_eff = 0.015 × 0.052 / (0.052 + 0.015) = 0.0117 %/h, which is 78 % of
+β_eff = 0.015 × 0.045 / (0.045 + 0.005) = 0.0135 %/h, which is 90 % of
 β_max — close to zero-order behaviour as expected at this BAC level
 (RESEARCH.md §3.1).
 
@@ -542,16 +561,16 @@ All drinks get: T_absorb = 120 min, ethanol_factor = 0.90.
 | Time | BAC | Comparison (fasted) |
 |------|-----|---------------------|
 | 19:00 | 0.000 % | 0.000 % |
-| 20:00 | 0.009 % | 0.021 % |
-| 21:00 | 0.023 % | 0.038 % |
-| 21:45 | 0.035 % | 0.052 % (peak) |
-| 22:00 | 0.038 % | 0.050 % |
-| 22:30 | **0.038 %** (peak) | 0.045 % |
-| 00:30 | 0.000 % | 0.005 % |
+| 20:00 | 0.006 % | 0.016 % |
+| 21:00 | 0.019 % | 0.029 % |
+| 21:45 | 0.027 % | 0.045 % (peak) |
+| 22:00 | 0.029 % | 0.042 % |
+| 22:30 | **0.029 %** (peak) | 0.038 % |
+| 00:30 | 0.000 % | ~0.001 % |
 
-**Peak BAC: 0.0378 %** — 72 % of the fasted peak (28 % reduction).
+**Peak BAC: 0.0293 %** — 65 % of the fasted peak (35 % reduction).
 
-**Teaching point:** The heavy meal reduces peak BAC by 28 %. This falls within
+**Teaching point:** The heavy meal reduces peak BAC by 35 %. This falls within
 the 20–50 % range documented in the literature (RESEARCH.md §1.3). The
 reduction comes primarily from the extended T_absorb (120 min vs. 45 min),
 which spreads absorption and allows more concurrent elimination. The
@@ -563,8 +582,7 @@ The gray dashed line shows the fasted baseline (Example 1) for comparison.
 
 **Theory cross-reference:** RESEARCH.md §1.3: "Peak BAC in a fed individual
 may be 20–50 % lower than in a fasted individual consuming the same dose."
-Our 28 % reduction is at the lower end, consistent with the M-M elimination
-model being more conservative than pure zero-order elimination at low BAC.
+Our 35 % reduction sits squarely in that range.
 
 ---
 
@@ -592,7 +610,7 @@ model being more conservative than pure zero-order elimination at low BAC.
 - **Wine 3 (21:30):** Case A: 20:00 ≤ 21:30 ≤ 22:30. **Yes.** Covered.
   Gets T_absorb = 90 min, factor = 0.92.
 
-**Peak BAC: 0.0387 %**
+**Peak BAC: 0.0284 %**
 
 **Teaching point:** Wine 1 absorbs at the full fasted rate (45 min), producing
 a quick initial rise. Wines 2 and 3 absorb slowly (90 min each, full meal).
@@ -631,7 +649,7 @@ some arbitrary time window before food?"
 
 All three wines get food parameters: T_absorb = 90 min, factor = 0.92.
 
-**Peak BAC: 0.0422 %**
+**Peak BAC: 0.0333 %**
 
 **Teaching point:** Moving Wine 1 from 19:00 (Example 3) to 19:30 (Example 4)
 changes its coverage status from "not covered" to "covered via Case B."
@@ -674,7 +692,7 @@ retroactively slow its absorption.
   snack's 60-minute post_window. **Not covered.** Gets fasted parameters:
   T_absorb = 45 min, factor = 1.00.
 
-**Peak BAC: 0.0521 %** — 99 % of fasted peak.
+**Peak BAC: 0.0448 %** — 99 % of fasted peak.
 
 **Teaching point:** A snack provides very limited protection: the
 ethanol_factor is only 0.97 (3 % FPM increase), and the T_absorb extends
@@ -719,7 +737,7 @@ Full meal at 18:30, post_window = 150 min → covers until 21:00.
 
 All drinks get: T_absorb = 90 min, factor = 0.92.
 
-**Peak BAC: 0.0397 %** — 76 % of fasted peak.
+**Peak BAC: 0.0309 %** — 68 % of fasted peak.
 
 **Teaching point:** Carbonation normally accelerates absorption (T_absorb =
 20 min), but food *dominates* gastric emptying. When food is present, it
@@ -766,11 +784,11 @@ Is there a food event logged?
 
 | Scenario | Peak BAC reduction | Typical peak (3 wines, 70 kg male) |
 |----------|-------------------|------------------------------------|
-| Fasted (baseline) | — | 0.052 % |
-| Snack nearby | −1 % | 0.052 % |
-| Light meal before | −10–15 % | 0.045 % |
-| Full meal before | −20–30 % | 0.040 % |
-| Heavy meal before | −25–35 % | 0.038 % |
+| Fasted (baseline) | — | 0.045 % |
+| Snack nearby | −1 % | 0.045 % |
+| Light meal before | −5–15 % | 0.041 % |
+| Full meal before | −25–30 % | 0.033 % |
+| Heavy meal before | −30–35 % | 0.029 % |
 
 These combined reductions (from extended T_absorb + incremental FPM + M-M
 elimination dynamics) fall within the 20–50 % range documented in the

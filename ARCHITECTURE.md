@@ -168,11 +168,11 @@ Constants defined in `model/constants.js`:
 | `ETHANOL_DENSITY` | 0.789 | g/mL | Lide 2005, CRC Handbook |
 | `BLOOD_WATER_FRACTION` | 0.80 | — | Watson 1980; RESEARCH.md §2.2 |
 | `BETA_MAX` | 0.015 | %/h | Holford 1987; RESEARCH.md §3.1, §10 |
-| `KM` | 0.015 | % BAC | Norberg 2003; RESEARCH.md §3.1 |
+| `KM` | 0.005 | % BAC | Norberg 2003; RESEARCH.md §3.1 |
 | `T_BASE_NORMAL` | 45 | min | Kalant 1971; RESEARCH.md §1.1 |
 | `T_BASE_CARBONATED` | 20 | min | Ridout 2003; RESEARCH.md §1.4 |
 | `WIDMARK_R` | {male: 0.68, female: 0.55} | — | Widmark 1932; RESEARCH.md §8 |
-| `WITH_FOOD_FLAG` | {T_absorb: {normal:90, carbonated:45}, factor:0.85} | — | REQUIREMENTS.md §4.3.2 |
+| `WITH_FOOD_FLAG` | {T_absorb: {normal:90, carbonated:45}, factor:0.93} | — | REQUIREMENTS.md §4.3.2 (legacy fallback) |
 | `FOOD_PARAMS` | {snack/light/full/heavy} | — | Frezza 1990; RESEARCH.md §1.3 |
 | `UNCERTAINTY_CV` | 0.21 | — | Gullberg 2015; REQUIREMENTS.md §4.3.4 |
 | `BAC_THRESHOLDS` | {sober/buzz/tipsy/drunk/heavy} | % BAC | REQUIREMENTS.md §4.4 |
@@ -437,7 +437,7 @@ Manages the current session in `localStorage` under the key `alculator_session`.
 //   "schema": "alculator-session-v2",
 //   "saved_at": "<ISO timestamp>",
 //   "profile": { sex, weight_kg, height_cm, age },
-//   "drinks": [ { id, name, volume_ml, abv_pct, logged_at, carbonated, with_food } ],
+//   "drinks": [ { preset_id?, volume_ml, abv_pct, time_min, end_min, carbonated } ],
 //   "food_events": [ { id, meal_size, note, logged_at } ]
 // }
 
