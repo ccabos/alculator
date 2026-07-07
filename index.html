@@ -513,64 +513,32 @@
     <button id="ios-install-close" aria-label="Dismiss install hint">✕</button>
   </div>
 
-  <!-- ── Update-available banner (shown when a newer version is cached) ────── -->
-  <div id="update-banner" role="status" hidden>
-    <span>A new version of Alculator is available.</span>
-    <button id="update-btn" class="btn btn-primary">Update</button>
-    <button id="update-dismiss" aria-label="Dismiss update notice">✕</button>
-  </div>
-
   <script defer src="https://cloud.umami.is/script.js" data-website-id="e472f84f-3d55-42ca-a98b-e554c3ec7b21"></script>
   <script type="module" src="index.js"></script>
 
-  <!-- ── Service worker registration + update prompt ─────────────────────── -->
+  <!-- ── Service worker registration + self-activating auto-update ────────── -->
   <script>
     if ('serviceWorker' in navigator) {
-      // Reload only when the user asked for the update (below). This flag keeps
-      // the initial clients.claim() on a first visit from triggering a reload.
-      var reloadOnControllerChange = false;
-      navigator.serviceWorker.addEventListener('controllerchange', function () {
-        if (reloadOnControllerChange) window.location.reload();
-      });
+      // If this page is already controlled by a worker, a later controllerchange
+      // means a new version activated → reload once to run the fresh assets.
+      // On a first visit the page is not yet controlled, so the initial claim
+      // does not trigger a reload (avoids a needless first-load refresh).
+      if (navigator.serviceWorker.controller) {
+        var reloaded = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+          if (reloaded) return;
+          reloaded = true;
+          window.location.reload();
+        });
+      }
 
       navigator.serviceWorker.register('./sw.js').then(function (reg) {
-        var banner = document.getElementById('update-banner');
-        var btn    = document.getElementById('update-btn');
-
-        function offerUpdate(worker) {
-          if (!worker) return;
-          banner.hidden = false;
-          btn.onclick = function () {
-            btn.disabled = true;
-            btn.textContent = 'Updating…';
-            reloadOnControllerChange = true;
-            worker.postMessage('SKIP_WAITING'); // activate → controllerchange → reload
-          };
-        }
-
-        // A worker may already be waiting from a previous visit.
-        if (reg.waiting && navigator.serviceWorker.controller) offerUpdate(reg.waiting);
-
-        // A new worker started installing during this visit.
-        reg.addEventListener('updatefound', function () {
-          var nw = reg.installing;
-          if (!nw) return;
-          nw.addEventListener('statechange', function () {
-            // 'installed' with an existing controller = an update (not first install).
-            if (nw.state === 'installed' && navigator.serviceWorker.controller) offerUpdate(nw);
-          });
-        });
-
-        // Check for a new version now, and again whenever the app regains focus
-        // (important for installed PWAs that are rarely fully reloaded).
+        // Check for a new version now, and whenever the app regains focus —
+        // important for installed PWAs that are rarely fully reloaded.
         reg.update();
         document.addEventListener('visibilitychange', function () {
           if (document.visibilityState === 'visible') reg.update();
         });
-      });
-
-      document.getElementById('update-dismiss').addEventListener('click', function () {
-        document.getElementById('update-banner').hidden = true;
       });
     }
   </script>

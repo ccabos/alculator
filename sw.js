@@ -3,14 +3,17 @@
  *
  * Strategy: cache-first for all app assets.
  * To ship an update, bump CACHE_VERSION — the browser will install the new
- * worker and re-cache everything under the new name.  The new worker then
- * *waits* (it does not call skipWaiting on install) until the page tells it to
- * take over via a 'SKIP_WAITING' message — this is what the in-app "Update"
- * banner triggers.  On activation it deletes the old cache and claims clients,
- * and the page reloads on controllerchange to pick up the fresh assets.
+ * worker and re-cache everything under the new name.
+ *
+ * Update model: SELF-ACTIVATING.  The new worker calls skipWaiting() on install
+ * and claims all clients on activate, so it takes over as soon as the browser
+ * fetches it — no waiting behind open tabs.  The page listens for the resulting
+ * controllerchange and reloads once to pick up the fresh assets.  This is much
+ * more reliable than a "waiting worker + Update button" on iOS, where a waiting
+ * worker only activates once every instance of an installed PWA is fully closed.
  */
 
-const CACHE_VERSION = 'v22';
+const CACHE_VERSION = 'v23';
 const CACHE_NAME    = `alculator-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -40,18 +43,12 @@ const PRECACHE_URLS = [
 // ── Install: pre-cache all app files ────────────────────────────────────────
 
 self.addEventListener('install', event => {
-  // Note: no skipWaiting() here — the new worker stays in the "waiting" state so
-  // the page can surface an "Update available" prompt and let the user choose
-  // when to switch.  The page activates it by posting 'SKIP_WAITING' (below).
+  // Activate as soon as installed rather than waiting behind open clients.
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE_URLS))
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(PRECACHE_URLS))
+      .then(() => self.skipWaiting())
   );
-});
-
-// ── Message: allow the page to activate a waiting worker on demand ───────────
-
-self.addEventListener('message', event => {
-  if (event.data === 'SKIP_WAITING') self.skipWaiting();
 });
 
 // ── Activate: delete stale caches ───────────────────────────────────────────

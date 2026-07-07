@@ -567,42 +567,6 @@ label.toggle-label { flex-direction: row; align-items: center; }
   justify-content: center;
 }
 
-/* ── Update-available banner ─────────────────────────────────────────────────── */
-#update-banner {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 1000;
-  background: #1e40af;
-  color: #fff;
-  font-size: 0.9rem;
-  padding: 0.6rem 0.75rem;
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.25);
-  /* Respect the iOS home-indicator safe area when installed. */
-  padding-bottom: calc(0.6rem + env(safe-area-inset-bottom));
-}
-#update-banner .btn { margin-left: auto; }
-#update-btn {
-  padding: 0.4rem 0.9rem;
-  min-height: var(--touch);
-  white-space: nowrap;
-}
-#update-dismiss {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: inherit;
-  min-width: var(--touch);
-  min-height: var(--touch);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 /* ── Gesture value overlay ───────────────────────────────────────────────────── */
 /* Floating pill shown at the top of the viewport while the user drags a
    log entry.  Displays the current time or duration in large text so the
