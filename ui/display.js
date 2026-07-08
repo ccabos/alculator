@@ -146,8 +146,10 @@ export function renderSessionLog(
       const d = ev.data;
       const preset = d.preset_id ? presetMap[d.preset_id] : null;
       const name = preset ? preset.name : 'Custom drink';
-      const dur  = drinkDurationMin(d);
-      const meta = _buildDrinkMeta(d.volume_ml, d.abv_pct, dur, d.carbonated, d.with_food);
+      const dur     = drinkDurationMin(d);
+      const endMin  = wrapTime(d.time_min + dur);
+      const meta    = _buildDrinkMeta(d.volume_ml, d.abv_pct, d.carbonated, d.with_food);
+      const timeLbl = dur > 0 ? `${fmtTime(d.time_min)}–${fmtTime(endMin)}` : fmtTime(d.time_min);
 
       return `<div class="log-entry log-entry-drink" data-kind="drink" data-index="${ev.index}"
               data-orig-time-min="${d.time_min}" data-orig-duration-min="${dur}"
@@ -160,7 +162,7 @@ export function renderSessionLog(
           <div class="log-entry-name">${esc(name)}</div>
           <div class="log-entry-meta">${esc(meta)}</div>
         </div>
-        <span class="log-entry-time">${fmtTime(d.time_min)}</span>
+        <span class="log-entry-time">${timeLbl}</span>
         <div class="log-entry-actions">
           <button class="log-action-btn delete-drink-btn" data-index="${ev.index}"
                   aria-label="Delete drink">✕</button>
@@ -312,10 +314,12 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
     row.setPointerCapture(activePointerId);
     row.classList.add('log-entry-held');
     navigator.vibrate?.(15);
-    // Show overlay with the row's current values (before any drag)
-    const t = wrapTime(Number(row.dataset.origTimeMin) % 1440);
-    const d = row.dataset.origDurationMin;
-    _showGestureOverlay(d != null ? `${fmtTime(t)}  ·  ${Number(d)} min` : fmtTime(t));
+    // Show overlay with the row's current values (before any drag).
+    // Drinks (with a duration) show the start–finish range; food rows show the time.
+    const start   = wrapTime(Number(row.dataset.origTimeMin) % 1440);
+    const durAttr = row.dataset.origDurationMin;
+    const dur     = durAttr != null ? Number(durAttr) : 0;
+    _showGestureOverlay(dur > 0 ? `${fmtTime(start)}–${fmtTime(wrapTime(start + dur))}` : fmtTime(start));
   };
 
   const reset = () => {
@@ -445,47 +449,43 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
 
 /**
  * Rebuild the drink meta string from raw fields (matches the log HTML).
+ * The drinking window is shown as a start–finish time range on the row, not here.
  */
-function _buildDrinkMeta(volume_ml, abv_pct, duration_min, carbonated, with_food) {
+function _buildDrinkMeta(volume_ml, abv_pct, carbonated, with_food) {
   return [
     `${volume_ml} mL`,
     `${abv_pct} % ABV`,
-    duration_min ? `${duration_min} min` : null,
-    carbonated   ? 'carbonated' : null,
-    with_food    ? 'with food'  : null,
+    carbonated ? 'carbonated' : null,
+    with_food  ? 'with food'  : null,
   ].filter(Boolean).join(' · ');
 }
 
 /**
- * Update the time label and meta text of a drink row during drag.
- * Time wraps around midnight; duration is clamped to [0, 180].
+ * Update the start–finish time range of a drink row during drag.
+ *
+ * Horizontal drag (dtTime) shifts the whole window, carrying the finish time
+ * with the start.  Vertical drag (dtDur) moves only the finish time, keeping
+ * the start fixed — i.e. it edits when the drink was finished.  The drinking
+ * window stays within [0, 180] min.  Times wrap around midnight.
  */
 function _updateDrinkRowFeedback(row, dtTime, dtDur) {
-  const origTime = Number(row.dataset.origTimeMin);
-  const origDur  = Number(row.dataset.origDurationMin);
+  // origTimeMin may be a normalized value (> 1440); reduce to clock range first.
+  const startBase = Number(row.dataset.origTimeMin) % 1440;
+  const origDur   = Number(row.dataset.origDurationMin);
 
-  // origTime may be a normalized value (> 1440); reduce to clock range before wrapping.
-  const newTime = wrapTime(origTime % 1440 + dtTime);
-  const newDur  = Math.max(0, Math.min(180, origDur + dtDur));
+  const newStart = wrapTime(startBase + dtTime);
+  const newDur   = Math.max(0, Math.min(180, origDur + dtDur));
+  const newEnd   = wrapTime(newStart + newDur);
 
   const timeEl = row.querySelector('.log-entry-time');
-  const metaEl = row.querySelector('.log-entry-meta');
-
   if (timeEl) {
-    timeEl.textContent = fmtTime(newTime);
-    timeEl.classList.toggle('log-entry-feedback-active', dtTime !== 0);
+    timeEl.textContent = newDur > 0 ? `${fmtTime(newStart)}–${fmtTime(newEnd)}` : fmtTime(newStart);
+    timeEl.classList.toggle('log-entry-feedback-active', dtTime !== 0 || dtDur !== 0);
   }
-  if (metaEl) {
-    const volume_ml  = Number(row.dataset.volumeMl);
-    const abv_pct    = Number(row.dataset.abvPct);
-    const carbonated = row.dataset.carbonated === 'true';
-    const with_food  = row.dataset.withFood   === 'true';
-    metaEl.textContent = _buildDrinkMeta(volume_ml, abv_pct, newDur, carbonated, with_food);
-    metaEl.classList.toggle('log-entry-feedback-active', dtDur !== 0);
-  }
-  // Live overlay: show whichever value is currently being dragged
-  if (dtTime !== 0) _showGestureOverlay(fmtTime(newTime));
-  else if (dtDur !== 0) _showGestureOverlay(`${newDur} min`);
+  // Live overlay: dragging the finish reports the finish clock time; dragging
+  // the start reports the shifted window.
+  if (dtDur !== 0)       _showGestureOverlay(`ends ${fmtTime(newEnd)}`);
+  else if (dtTime !== 0) _showGestureOverlay(`${fmtTime(newStart)}–${fmtTime(newEnd)}`);
 }
 
 /**
