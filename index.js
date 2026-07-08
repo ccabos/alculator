@@ -168,7 +168,7 @@ function redraw() {
   document.getElementById('bac-display').style.opacity = profileComplete ? '1' : '0.3';
 
   if (!profileComplete) {
-    renderSessionLog(drinks, food_events, presets, _deleteDrink, _deleteFood, _editDrink, _editFood, _gestureDrink, _liveChartUpdate, _gestureFood, _liveFoodChartUpdate);
+    renderSessionLog(drinks, food_events, presets, _deleteDrink, _deleteFood, _editDrink, _editFood, _gestureDrink, _liveChartUpdate, _gestureFood, _liveFoodChartUpdate, _setDrinkEndNow);
     return;
   }
 
@@ -209,7 +209,7 @@ function redraw() {
   renderBACDisplay(bac_now, bounds);
   renderSoberTime(sober_t);
   renderChart(extended, nDrinks, nFood, now_min);
-  renderSessionLog(nDrinks, nFood, presets, _deleteDrink, _deleteFood, _editDrink, _editFood, _gestureDrink, _liveChartUpdate, _gestureFood, _liveFoodChartUpdate);
+  renderSessionLog(nDrinks, nFood, presets, _deleteDrink, _deleteFood, _editDrink, _editFood, _gestureDrink, _liveChartUpdate, _gestureFood, _liveFoodChartUpdate, _setDrinkEndNow);
 }
 
 // ─── Delete handlers ──────────────────────────────────────────────────────────
@@ -258,6 +258,25 @@ function _applyDrinkDelta(drink, dtTimeMins, dtDurMins) {
   const newDur   = Math.max(0, Math.min(180, curDur + dtDurMins));
   const { duration_min, ...rest } = drink;
   return { ...rest, time_min: newStart, end_min: _wrapMin(newStart + newDur) };
+}
+
+/**
+ * Double-tap shortcut: set a drink's finish time to the current clock time
+ * (keeping its start), for marking "just finished this drink". The drinking
+ * duration is re-derived from start → now.
+ *
+ * @param {number} index — index into session.drinks
+ */
+function _setDrinkEndNow(index) {
+  const drink = session.drinks[index];
+  if (!drink) return;
+  const { duration_min, ...rest } = drink;
+  const updated = { ...rest, end_min: _nowMin() };
+  const drinks = session.drinks.map((d, i) => i === index ? updated : d);
+  session = { ...session, drinks };
+  saveSession(session);
+  navigator.vibrate?.(15);
+  redraw();
 }
 
 function _gestureFood(index, dtTimeMins) {

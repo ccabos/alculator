@@ -307,6 +307,13 @@ times, volume, and ABV (carbonation is fixed for preset drink types and editable
 only for custom drinks). For a food event you can change the timestamp or meal
 size. Changes take effect immediately and the BAC curve recalculates.
 
+**Quick shortcuts on a drink row:**
+- **Double-tap** a drink to set its **finish time to now** — handy for marking
+  "just finished this one" without opening the editor.
+- **Press and hold, then drag** a drink: drag **sideways** to move the whole
+  drink earlier/later, or **up/down** to move its finish time (lengthen or
+  shorten how long you took over it).
+
 ### Deleting an entry
 
 Swipe left on any log entry (or long-press and tap Delete) to remove it.

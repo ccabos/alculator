@@ -116,6 +116,8 @@ const MEAL_LABELS = {
  * @param {Function} [onChartUpdate]  — callback(index, deltaTimeMins, deltaDurationMins)
  * @param {Function} [onGestureFood]  — callback(index, deltaTimeMins)
  * @param {Function} [onFoodChartUpdate] — callback(index, deltaTimeMins)
+ * @param {Function} [onSetDrinkEndNow]  — callback(index): double-tap a drink to
+ *   set its finish time to the current time
  */
 export function renderSessionLog(
   drinks, food_events, presets,
@@ -123,6 +125,7 @@ export function renderSessionLog(
   onEditDrink,   onEditFood,
   onGestureDrink, onChartUpdate,
   onGestureFood,  onFoodChartUpdate,
+  onSetDrinkEndNow,
 ) {
   const container = document.getElementById('log-entries');
 
@@ -197,6 +200,7 @@ export function renderSessionLog(
     _bindGestureRow(row, {
       allowVertical:  true,
       onTap:          () => onEditDrink(index),
+      onDoubleTap:    () => onSetDrinkEndNow?.(index),
       onGesture:      (dt, dd) => onGestureDrink?.(index, dt, dd),
       onChartLive:    (dt, dd) => onChartUpdate?.(index, dt, dd),
       updateFeedback: _updateDrinkRowFeedback,
@@ -269,12 +273,19 @@ const SCROLL_THRESHOLD = 4;
 const PX_PER_MIN       = 3;
 /** px of movement after activation before the axis is locked. */
 const DRAG_THRESHOLD   = 8;
+/** ms window within which a second tap counts as a double-tap. When a row has a
+ *  double-tap action, the single-tap (edit) is deferred by this long to tell
+ *  the two apart. */
+const DOUBLE_TAP_MS    = 250;
 
 /**
  * Bind a unified long-press + drag gesture to a single log-entry row.
  *
  * Interaction model:
  *   • Short tap (< LONG_PRESS_MS, < ABORT_THRESHOLD movement) → onTap()
+ *   • Double tap (two taps within DOUBLE_TAP_MS) → onDoubleTap(), if provided;
+ *     when a double-tap action exists, onTap is deferred by DOUBLE_TAP_MS so the
+ *     two can be told apart
  *   • Vertical swipe before hold completes → scrolls #main (the real overflow container)
  *   • Horizontal swipe before hold completes → cancels long-press (no gesture, no tap)
  *   • Hold LONG_PRESS_MS without moving → gesture activates (haptic + visual)
@@ -289,9 +300,27 @@ const DRAG_THRESHOLD   = 8;
  *
  * @param {HTMLElement} row
  * @param {{ allowVertical: boolean, onTap: Function, onGesture: Function,
- *           onChartLive: Function, updateFeedback: Function }} config
+ *           onChartLive: Function, updateFeedback: Function, onDoubleTap?: Function }} config
  */
-function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, updateFeedback }) {
+function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, updateFeedback, onDoubleTap }) {
+  // Double-tap arbitration state (only used when onDoubleTap is provided).
+  let singleTapTimer = null;
+  let lastTapAt      = 0;
+  const clearPendingTap = () => {
+    if (singleTapTimer !== null) { clearTimeout(singleTapTimer); singleTapTimer = null; }
+    lastTapAt = 0;
+  };
+  const handleTap = () => {
+    if (!onDoubleTap) { onTap?.(); return; }  // no double-tap action → open edit immediately
+    const now = Date.now();
+    if (singleTapTimer !== null && now - lastTapAt < DOUBLE_TAP_MS) {
+      clearPendingTap();
+      onDoubleTap();
+    } else {
+      lastTapAt = now;
+      singleTapTimer = setTimeout(() => { singleTapTimer = null; onTap?.(); }, DOUBLE_TAP_MS);
+    }
+  };
   let startX = 0, startY = 0;
   let axisLocked      = null;
   let didDrag         = false;
@@ -422,12 +451,14 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
     reset();
 
     if (wasReady && wasDrag) {
+      clearPendingTap(); // a drag is not a tap — discard any pending single-tap
       const dtTime = finalAxis === 'x' ? Math.round(finalDx / PX_PER_MIN) : 0;
       const dtDur  = finalAxis === 'y' ? -Math.round(finalDy / PX_PER_MIN) : 0;
       onGesture?.(dtTime, dtDur);
     } else if (!wasScroll) {
-      // Short tap or hold-without-drag: open edit panel
-      onTap?.();
+      // Short tap or hold-without-drag: open edit (or, on a second quick tap, run
+      // the double-tap action).
+      handleTap();
     }
   });
 
