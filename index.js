@@ -168,7 +168,7 @@ function redraw() {
   document.getElementById('bac-display').style.opacity = profileComplete ? '1' : '0.3';
 
   if (!profileComplete) {
-    renderSessionLog(drinks, food_events, presets, _deleteDrink, _deleteFood, _editDrink, _editFood, _gestureDrink, _liveChartUpdate, _gestureFood, _liveFoodChartUpdate, _setDrinkEndNow);
+    renderSessionLog(drinks, food_events, presets, _deleteDrink, _deleteFood, _editDrink, _editFood, _fieldLive, _fieldCommit, _setDrinkTimeNow, _gestureFood, _liveFoodChartUpdate);
     return;
   }
 
@@ -209,7 +209,7 @@ function redraw() {
   renderBACDisplay(bac_now, bounds);
   renderSoberTime(sober_t);
   renderChart(extended, nDrinks, nFood, now_min);
-  renderSessionLog(nDrinks, nFood, presets, _deleteDrink, _deleteFood, _editDrink, _editFood, _gestureDrink, _liveChartUpdate, _gestureFood, _liveFoodChartUpdate, _setDrinkEndNow);
+  renderSessionLog(nDrinks, nFood, presets, _deleteDrink, _deleteFood, _editDrink, _editFood, _fieldLive, _fieldCommit, _setDrinkTimeNow, _gestureFood, _liveFoodChartUpdate);
 }
 
 // ─── Delete handlers ──────────────────────────────────────────────────────────
@@ -226,53 +226,46 @@ function _deleteFood(index) {
   redraw();
 }
 
-// ─── Gesture handler ───────────────────────────────────────────────────────────
+// ─── Drink field editing (log field buttons) ───────────────────────────────────
 
 /**
- * Apply a drag-gesture delta to a drink's start time and/or drinking duration.
+ * Return a copy of a drink with one field-button value applied. Materialises an
+ * explicit end_min from the current window (and drops any legacy duration_min)
+ * so start/end edits stay consistent.
  *
- * Horizontal drag shifts the start time (carrying the finish time with it so the
- * duration is preserved); vertical drag lengthens/shortens the drinking window
- * by moving only the finish time.  Both are expressed by rewriting end_min.
- *
- * @param {number} index         — index into session.drinks
- * @param {number} dtTimeMins    — minutes to add to the start time (negative = earlier)
- * @param {number} dtDurMins     — minutes to add to the duration (negative = shorter)
+ * @param {object} drink
+ * @param {'volume'|'abv'|'start'|'end'} field
+ * @param {number} value
  */
-function _gestureDrink(index, dtTimeMins, dtDurMins) {
+function _applyFieldValue(drink, field, value) {
+  const { duration_min, ...rest } = drink;
+  const out = { ...rest, end_min: _wrapMin(drink.time_min + drinkDurationMin(drink)) };
+  if      (field === 'volume') out.volume_ml = value;
+  else if (field === 'abv')    out.abv_pct   = value;
+  else if (field === 'start')  out.time_min  = value;
+  else if (field === 'end')    out.end_min   = value;
+  return out;
+}
+
+/** Commit a slid field value: update the drink, persist, and re-render. */
+function _fieldCommit(index, field, value) {
   const drink = session.drinks[index];
   if (!drink) return;
-  const drinks = session.drinks.map((d, i) => i === index ? _applyDrinkDelta(d, dtTimeMins, dtDurMins) : d);
+  const drinks = session.drinks.map((d, i) => i === index ? _applyFieldValue(d, field, value) : d);
   session = { ...session, drinks };
   saveSession(session);
   redraw();
 }
 
 /**
- * Return a copy of a drink with a start/duration drag delta applied, expressed
- * as time_min + end_min.  Drops any legacy duration_min field.
+ * Double-tap a start/end button: set that time to the current clock time.
+ * @param {number} index
+ * @param {'start'|'end'} field
  */
-function _applyDrinkDelta(drink, dtTimeMins, dtDurMins) {
-  const curDur   = drinkDurationMin(drink);
-  const newStart = _wrapMin(drink.time_min + dtTimeMins);
-  const newDur   = Math.max(0, Math.min(180, curDur + dtDurMins));
-  const { duration_min, ...rest } = drink;
-  return { ...rest, time_min: newStart, end_min: _wrapMin(newStart + newDur) };
-}
-
-/**
- * Double-tap shortcut: set a drink's finish time to the current clock time
- * (keeping its start), for marking "just finished this drink". The drinking
- * duration is re-derived from start → now.
- *
- * @param {number} index — index into session.drinks
- */
-function _setDrinkEndNow(index) {
+function _setDrinkTimeNow(index, field) {
   const drink = session.drinks[index];
   if (!drink) return;
-  const { duration_min, ...rest } = drink;
-  const updated = { ...rest, end_min: _nowMin() };
-  const drinks = session.drinks.map((d, i) => i === index ? updated : d);
+  const drinks = session.drinks.map((d, i) => i === index ? _applyFieldValue(d, field, _nowMin()) : d);
   session = { ...session, drinks };
   saveSession(session);
   navigator.vibrate?.(15);
@@ -292,26 +285,25 @@ function _gestureFood(index, dtTimeMins) {
 /** Wrap absolute minutes into the 0–1439 clock range. */
 function _wrapMin(t) { return ((t % 1440) + 1440) % 1440; }
 
-// ─── Live chart update during drag ────────────────────────────────────────────
+// ─── Live chart update during a field slide ─────────────────────────────────────
 
 /**
- * Re-render only the BAC chart (and header readout) with a hypothetical drink
- * position, without touching the session log so the ongoing drag state is
- * preserved.  Called by the gesture handler once per integer-minute change.
+ * Re-render only the BAC chart + header readout (not the session log) with a
+ * tentative field value, so the in-progress slide gesture and its button keep
+ * their state.  Called by the field slider on each step.
  *
- * @param {number} index      — index into session.drinks
- * @param {number} dtTimeMins — tentative delta for time_min
- * @param {number} dtDurMins  — tentative delta for duration_min
+ * @param {number} index — index into session.drinks
+ * @param {'volume'|'abv'|'start'|'end'} field
+ * @param {number} value — tentative value
  */
-function _liveChartUpdate(index, dtTimeMins, dtDurMins) {
+function _fieldLive(index, field, value) {
   const { profile, food_events } = session;
   if (!profile?.sex || !profile?.weight_kg || !profile?.age) return; // no chart without profile
 
   const drink = session.drinks[index];
   if (!drink) return;
 
-  const tempDrink  = _applyDrinkDelta(drink, dtTimeMins, dtDurMins);
-  const tempDrinks = session.drinks.map((d, i) => i === index ? tempDrink : d);
+  const tempDrinks = session.drinks.map((d, i) => i === index ? _applyFieldValue(d, field, value) : d);
 
   const { drinks: nDrinks, food_events: nFood, now_min } =
     _normalizeTimes(tempDrinks, food_events, _nowMin());

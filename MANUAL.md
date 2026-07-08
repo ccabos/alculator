@@ -307,12 +307,17 @@ times, volume, and ABV (carbonation is fixed for preset drink types and editable
 only for custom drinks). For a food event you can change the timestamp or meal
 size. Changes take effect immediately and the BAC curve recalculates.
 
-**Quick shortcuts on a drink row:**
-- **Double-tap** a drink to set its **finish time to now** — handy for marking
-  "just finished this one" without opening the editor.
-- **Press and hold, then drag** a drink: drag **sideways** to move the whole
-  drink earlier/later, or **up/down** to move its finish time (lengthen or
-  shorten how long you took over it).
+**Adjusting a drink directly from its log row.** Each drink shows four
+button-like fields — **Vol**, **ABV**, **Start**, and **End**. To change one,
+**press and hold the field, then slide up or down**; the value goes up or down in
+sensible steps and the current setting is shown large at the top of the screen.
+Release to keep it. (Tap the drink's **name** at any time to open the full editor
+instead.)
+
+- **Vol** — drink volume in mL.
+- **ABV** — alcohol content in %.
+- **Start** / **End** — the times you began and finished the drink. **Double-tap**
+  a time field to set it to **now** (e.g. double-tap **End** the moment you finish).
 
 ### Deleting an entry
 

@@ -114,18 +114,20 @@ const MEAL_LABELS = {
  * @param {Function} onEditFood       — callback(index)
  * @param {Function} [onGestureDrink] — callback(index, deltaTimeMins, deltaDurationMins)
  * @param {Function} [onChartUpdate]  — callback(index, deltaTimeMins, deltaDurationMins)
+ * @param {Function} [onFieldLive]   — callback(index, field, value): live preview
+ *   while sliding a drink field button (field: 'volume'|'abv'|'start'|'end')
+ * @param {Function} [onFieldCommit] — callback(index, field, value): commit a slid value
+ * @param {Function} [onSetDrinkTimeNow] — callback(index, field): double-tap a
+ *   drink's start/end button to set that time to now
  * @param {Function} [onGestureFood]  — callback(index, deltaTimeMins)
  * @param {Function} [onFoodChartUpdate] — callback(index, deltaTimeMins)
- * @param {Function} [onSetDrinkEndNow]  — callback(index): double-tap a drink to
- *   set its finish time to the current time
  */
 export function renderSessionLog(
   drinks, food_events, presets,
   onDeleteDrink, onDeleteFood,
   onEditDrink,   onEditFood,
-  onGestureDrink, onChartUpdate,
-  onGestureFood,  onFoodChartUpdate,
-  onSetDrinkEndNow,
+  onFieldLive,   onFieldCommit, onSetDrinkTimeNow,
+  onGestureFood, onFoodChartUpdate,
 ) {
   const container = document.getElementById('log-entries');
 
@@ -149,26 +151,37 @@ export function renderSessionLog(
       const d = ev.data;
       const preset = d.preset_id ? presetMap[d.preset_id] : null;
       const name = preset ? preset.name : 'Custom drink';
-      const dur     = drinkDurationMin(d);
-      const endMin  = wrapTime(d.time_min + dur);
-      const meta    = _buildDrinkMeta(d.volume_ml, d.abv_pct, d.carbonated, d.with_food);
-      const timeLbl = dur > 0 ? `${fmtTime(d.time_min)}–${fmtTime(endMin)}` : fmtTime(d.time_min);
+      const dur    = drinkDurationMin(d);
+      const endMin = wrapTime(d.time_min + dur);
+      const tags   = [
+        d.carbonated ? '<span class="log-tag">carbonated</span>' : '',
+        d.with_food  ? '<span class="log-tag">with food</span>'  : '',
+      ].join('');
 
       return `<div class="log-entry log-entry-drink" data-kind="drink" data-index="${ev.index}"
-              data-orig-time-min="${d.time_min}" data-orig-duration-min="${dur}"
-              data-volume-ml="${d.volume_ml}" data-abv-pct="${d.abv_pct}"
-              data-carbonated="${d.carbonated}" data-with-food="${d.with_food}"
-              role="button" tabindex="0" aria-label="Edit ${esc(name)}">
-        <span class="log-drag-hint" aria-hidden="true">⠿</span>
-        <span class="log-entry-icon" aria-hidden="true">${drinkIcon(d.preset_id)}</span>
-        <div class="log-entry-main">
-          <div class="log-entry-name">${esc(name)}</div>
-          <div class="log-entry-meta">${esc(meta)}</div>
+              data-vol="${d.volume_ml}" data-abv="${d.abv_pct}"
+              data-start="${d.time_min}" data-dur="${dur}">
+        <div class="log-entry-head" role="button" tabindex="0" aria-label="Edit ${esc(name)}">
+          <span class="log-entry-icon" aria-hidden="true">${drinkIcon(d.preset_id)}</span>
+          <div class="log-entry-name">${esc(name)}${tags}</div>
+          <div class="log-entry-actions">
+            <button class="log-action-btn delete-drink-btn" data-index="${ev.index}"
+                    aria-label="Delete drink">✕</button>
+          </div>
         </div>
-        <span class="log-entry-time">${timeLbl}</span>
-        <div class="log-entry-actions">
-          <button class="log-action-btn delete-drink-btn" data-index="${ev.index}"
-                  aria-label="Delete drink">✕</button>
+        <div class="log-fields">
+          <button type="button" class="log-field-btn" data-field="volume"
+                  aria-label="Volume ${d.volume_ml} mL; slide up or down to change">
+            <span class="field-label">Vol</span><span class="field-value">${d.volume_ml} mL</span></button>
+          <button type="button" class="log-field-btn" data-field="abv"
+                  aria-label="Alcohol content ${_fmtAbv(d.abv_pct)} percent; slide up or down to change">
+            <span class="field-label">ABV</span><span class="field-value">${_fmtAbv(d.abv_pct)} %</span></button>
+          <button type="button" class="log-field-btn" data-field="start"
+                  aria-label="Start time ${fmtTime(d.time_min)}; double-tap for now, slide to change">
+            <span class="field-label">Start</span><span class="field-value">${fmtTime(d.time_min)}</span></button>
+          <button type="button" class="log-field-btn" data-field="end"
+                  aria-label="Finish time ${fmtTime(endMin)}; double-tap for now, slide to change">
+            <span class="field-label">End</span><span class="field-value">${fmtTime(endMin)}</span></button>
         </div>
       </div>`;
     } else {
@@ -194,16 +207,27 @@ export function renderSessionLog(
 
   container.innerHTML = html;
 
-  // Drink rows — tap opens edit, hold+drag adjusts time (h) or duration (v)
+  // Drink rows — the header opens the editor; each field button is adjustable by
+  // a hold-and-slide, and the time buttons accept a double-tap to set "now".
   container.querySelectorAll('.log-entry-drink').forEach(row => {
     const index = Number(row.dataset.index);
-    _bindGestureRow(row, {
-      allowVertical:  true,
-      onTap:          () => onEditDrink(index),
-      onDoubleTap:    () => onSetDrinkEndNow?.(index),
-      onGesture:      (dt, dd) => onGestureDrink?.(index, dt, dd),
-      onChartLive:    (dt, dd) => onChartUpdate?.(index, dt, dd),
-      updateFeedback: _updateDrinkRowFeedback,
+    const head  = row.querySelector('.log-entry-head');
+    head.addEventListener('click', e => {
+      if (e.target.closest('.log-action-btn')) return;
+      onEditDrink(index);
+    });
+    head.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEditDrink(index); }
+    });
+    row.querySelectorAll('.log-field-btn').forEach(btn => {
+      const field = btn.dataset.field;
+      _bindFieldSlider(btn, field, {
+        onLive:      (f, v) => onFieldLive?.(index, f, v),
+        onCommit:    (f, v) => onFieldCommit?.(index, f, v),
+        onDoubleTap: (field === 'start' || field === 'end')
+          ? (f) => onSetDrinkTimeNow?.(index, f)
+          : null,
+      });
     });
   });
 
@@ -479,47 +503,6 @@ function _bindGestureRow(row, { allowVertical, onTap, onGesture, onChartLive, up
 // ─── Row feedback helpers ──────────────────────────────────────────────────────
 
 /**
- * Rebuild the drink meta string from raw fields (matches the log HTML).
- * The drinking window is shown as a start–finish time range on the row, not here.
- */
-function _buildDrinkMeta(volume_ml, abv_pct, carbonated, with_food) {
-  return [
-    `${volume_ml} mL`,
-    `${abv_pct} % ABV`,
-    carbonated ? 'carbonated' : null,
-    with_food  ? 'with food'  : null,
-  ].filter(Boolean).join(' · ');
-}
-
-/**
- * Update the start–finish time range of a drink row during drag.
- *
- * Horizontal drag (dtTime) shifts the whole window, carrying the finish time
- * with the start.  Vertical drag (dtDur) moves only the finish time, keeping
- * the start fixed — i.e. it edits when the drink was finished.  The drinking
- * window stays within [0, 180] min.  Times wrap around midnight.
- */
-function _updateDrinkRowFeedback(row, dtTime, dtDur) {
-  // origTimeMin may be a normalized value (> 1440); reduce to clock range first.
-  const startBase = Number(row.dataset.origTimeMin) % 1440;
-  const origDur   = Number(row.dataset.origDurationMin);
-
-  const newStart = wrapTime(startBase + dtTime);
-  const newDur   = Math.max(0, Math.min(180, origDur + dtDur));
-  const newEnd   = wrapTime(newStart + newDur);
-
-  const timeEl = row.querySelector('.log-entry-time');
-  if (timeEl) {
-    timeEl.textContent = newDur > 0 ? `${fmtTime(newStart)}–${fmtTime(newEnd)}` : fmtTime(newStart);
-    timeEl.classList.toggle('log-entry-feedback-active', dtTime !== 0 || dtDur !== 0);
-  }
-  // Live overlay: dragging the finish reports the finish clock time; dragging
-  // the start reports the shifted window.
-  if (dtDur !== 0)       _showGestureOverlay(`ends ${fmtTime(newEnd)}`);
-  else if (dtTime !== 0) _showGestureOverlay(`${fmtTime(newStart)}–${fmtTime(newEnd)}`);
-}
-
-/**
  * Update the time label of a food row during drag.
  * Time wraps around midnight.
  */
@@ -532,6 +515,161 @@ function _updateFoodRowFeedback(row, dtTime) {
     timeEl.classList.toggle('log-entry-feedback-active', dtTime !== 0);
   }
   if (dtTime !== 0) _showGestureOverlay(fmtTime(newTime));
+}
+
+// ─── Field-button slider ───────────────────────────────────────────────────────
+
+/** Largest drinking-window (minutes) reachable by sliding a start/end button. */
+const MAX_FIELD_DUR = 360;
+
+/** Format an ABV so whole numbers show without a decimal (12 %, not 12.0 %). */
+function _fmtAbv(v) {
+  return Number.isInteger(v) ? String(v) : String(Math.round(v * 10) / 10);
+}
+
+const FIELD_LABEL = { volume: 'Volume', abv: 'ABV', start: 'Start', end: 'End' };
+
+/**
+ * Compute the new value + display text for a field-button slide.
+ *
+ * @param {string} field  — 'volume' | 'abv' | 'start' | 'end'
+ * @param {{ vol:number, abv:number, start:number, dur:number }} base — values at slide start
+ * @param {number} units  — up-positive slide steps (one per PX_PER_MIN px)
+ * @returns {{ value:number, display:string }}
+ */
+function _fieldValueFor(field, base, units) {
+  if (field === 'volume') {
+    const v = Math.min(2000, Math.max(10, base.vol + units * 5));
+    return { value: v, display: `${v} mL` };
+  }
+  if (field === 'abv') {
+    const v = Math.min(100, Math.max(0, Math.round((base.abv + units * 0.5) * 2) / 2));
+    return { value: v, display: `${_fmtAbv(v)} %` };
+  }
+  if (field === 'start') {
+    // Move the start; keep the finish. Keep the window within [0, MAX_FIELD_DUR].
+    const endLin = base.start + base.dur;
+    const s = Math.round(Math.min(endLin, Math.max(endLin - MAX_FIELD_DUR, base.start + units)));
+    return { value: wrapTime(s), display: fmtTime(wrapTime(s)) };
+  }
+  // end: move the finish; keep the start.
+  const e = Math.round(Math.min(base.start + MAX_FIELD_DUR, Math.max(base.start, base.start + base.dur + units)));
+  return { value: wrapTime(e), display: fmtTime(wrapTime(e)) };
+}
+
+/**
+ * Bind a hold-and-slide gesture to one drink field button.
+ *
+ * Interaction mirrors the log rows: a quick vertical swipe scrolls the log; a
+ * long-press then a vertical slide adjusts the field's value (shown live in the
+ * button and in the top-of-screen overlay); release commits. Time buttons also
+ * accept a double-tap (via onDoubleTap) to set the value to now. A committed
+ * slide is not a tap, and horizontal movement before the hold cancels it.
+ *
+ * @param {HTMLElement} btn
+ * @param {string} field
+ * @param {{ onLive?: Function, onCommit?: Function, onDoubleTap?: Function|null }} cbs
+ */
+function _bindFieldSlider(btn, field, { onLive, onCommit, onDoubleTap }) {
+  let startX = 0, startY = 0, activePointerId = null, gestureReady = false;
+  let longPressTimer = null, scrollMode = false, lastScrollY = 0, currentY = 0;
+  let didDrag = false, base = null;
+  let singleTapTimer = null, lastTapAt = 0;
+  const valueEl = btn.querySelector('.field-value');
+
+  const readBase = () => {
+    const row = btn.closest('.log-entry-drink');
+    return {
+      vol:   Number(row.dataset.vol),
+      abv:   Number(row.dataset.abv),
+      start: Number(row.dataset.start),
+      dur:   Number(row.dataset.dur),
+    };
+  };
+
+  const activate = () => {
+    if (activePointerId == null || scrollMode) return;
+    if (Math.abs(currentY - startY) > 1) return; // drifted → probably scrolling
+    gestureReady = true;
+    btn.setPointerCapture(activePointerId);
+    btn.classList.add('log-field-active');
+    navigator.vibrate?.(15);
+    base = readBase();
+    _showGestureOverlay(`${FIELD_LABEL[field]}  ${_fieldValueFor(field, base, 0).display}`);
+  };
+
+  const reset = () => {
+    clearTimeout(longPressTimer); longPressTimer = null;
+    activePointerId = null; gestureReady = false; scrollMode = false;
+    didDrag = false; currentY = 0;
+    btn.classList.remove('log-field-active');
+    _hideGestureOverlay();
+  };
+
+  btn.addEventListener('pointerdown', e => {
+    startX = e.clientX; startY = e.clientY; currentY = e.clientY; lastScrollY = e.clientY;
+    activePointerId = e.pointerId; gestureReady = false; scrollMode = false; didDrag = false;
+    longPressTimer = setTimeout(activate, LONG_PRESS_MS);
+  });
+
+  btn.addEventListener('pointermove', e => {
+    if (activePointerId !== e.pointerId) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+
+    if (!gestureReady) {
+      currentY = e.clientY;
+      const stepY = e.clientY - lastScrollY; lastScrollY = e.clientY;
+      if (scrollMode) { document.getElementById('session-log').scrollBy(0, -stepY); return; }
+      const adx = Math.abs(dx), ady = Math.abs(dy);
+      if (ady > SCROLL_THRESHOLD && ady >= adx) {
+        clearTimeout(longPressTimer); longPressTimer = null; scrollMode = true;
+        document.getElementById('session-log').scrollBy(0, -dy);
+        return;
+      }
+      if (adx > ABORT_THRESHOLD) { clearTimeout(longPressTimer); longPressTimer = null; activePointerId = null; }
+      return;
+    }
+
+    e.preventDefault();
+    if (Math.abs(dy) > DRAG_THRESHOLD) didDrag = true;
+    const units = -Math.round(dy / PX_PER_MIN);
+    const { value, display } = _fieldValueFor(field, base, units);
+    if (valueEl) valueEl.textContent = display;
+    _showGestureOverlay(`${FIELD_LABEL[field]}  ${display}`);
+    onLive?.(field, value);
+  });
+
+  btn.addEventListener('pointerup', e => {
+    if (activePointerId !== e.pointerId) return;
+    const wasReady = gestureReady, wasDrag = didDrag, wasScroll = scrollMode;
+    const finalDy = e.clientY - startY;
+    const b = base;
+    reset();
+    if (wasReady && wasDrag && b) {
+      const units = -Math.round(finalDy / PX_PER_MIN);
+      onCommit?.(field, _fieldValueFor(field, b, units).value);
+    } else if (!wasReady && !wasScroll) {
+      handleTap();
+    }
+  });
+
+  btn.addEventListener('pointercancel', e => {
+    if (activePointerId !== e.pointerId) return;
+    if (gestureReady && base) onLive?.(field, _fieldValueFor(field, base, 0).value); // revert preview
+    reset();
+  });
+
+  function handleTap() {
+    if (!onDoubleTap) return; // volume/abv buttons have no tap action
+    const now = Date.now();
+    if (singleTapTimer !== null && now - lastTapAt < DOUBLE_TAP_MS) {
+      clearTimeout(singleTapTimer); singleTapTimer = null; lastTapAt = 0;
+      onDoubleTap(field);
+    } else {
+      lastTapAt = now;
+      singleTapTimer = setTimeout(() => { singleTapTimer = null; }, DOUBLE_TAP_MS);
+    }
+  }
 }
 
 // ─── Drink icon ───────────────────────────────────────────────────────────────

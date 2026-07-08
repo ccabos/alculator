@@ -13,7 +13,7 @@
  * worker only activates once every instance of an installed PWA is fully closed.
  */
 
-const CACHE_VERSION = 'v23';
+const CACHE_VERSION = 'v24';
 const CACHE_NAME    = `alculator-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
