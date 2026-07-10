@@ -254,13 +254,16 @@ body {
    Page scrolling is driven manually via #main.scrollBy() in JS when vertical
    movement is detected before the long-press timer fires.
    -webkit-tap-highlight-color:transparent suppresses the iOS tap flash that
-   would otherwise flicker during every scroll gesture over these rows. */
+   would otherwise flicker during every scroll gesture over these rows.
+   -webkit-touch-callout:none stops iOS from popping its long-press context
+   menu, which would otherwise fire before the hold-to-drag gesture engages. */
 .log-entry-food,
 .log-field-btn {
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
 }
 
 /* Visual indicator shown while the long-press hold is active */
