@@ -170,10 +170,10 @@ export function initDrinkPanel(presets, getSession, setSession) {
     customForm.hidden = false;
     presetGrid.hidden = true;
     customBtn.hidden  = true;
-    // Default to a drink just finished, drunk over ~15 min.
+    // Default to a drink starting now, finished 30 min later.
     const now = _nowMin();
-    document.getElementById('drink-time').value = _minToTime(_wrapMin(now - 15));
-    document.getElementById('drink-end').value  = _minToTime(now);
+    document.getElementById('drink-time').value = _minToTime(now);
+    document.getElementById('drink-end').value  = _minToTime(_wrapMin(now + 30));
     _syncDurationUI();
   });
   cancelBtn.addEventListener('click', () => {
