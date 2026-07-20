@@ -141,15 +141,17 @@ function _syncDurationUI() {
  */
 export function initDrinkPanel(presets, getSession, setSession) {
   _presetSelectCallback = preset => {
-    // One-tap logging: start the drink now and finish it 30 min later.
+    // One-tap logging: start the drink now and finish it after the preset's
+    // typical drinking duration.
     const now = _nowMin();
+    const dur = preset.duration_min ?? 0;
     _saveDrink({
       preset_id:  preset.id,
       volume_ml:  preset.volume_ml,
       abv_pct:    preset.abv_pct,
       carbonated: preset.carbonated,
       time_min:   now,
-      end_min:    _wrapMin(now + 30),
+      end_min:    _wrapMin(now + dur),
     }, getSession, setSession);
     closePanel('drink-panel');
   };
