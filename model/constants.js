@@ -259,7 +259,7 @@ export const SOBER_THRESHOLD = 0.001;
  */
 export const DEFAULT_DRINK_PRESETS = Object.freeze([
   { id: 'beer_regular',  name: 'Beer (regular)',  volume_ml: 330, abv_pct:  5.0, carbonated: false, duration_min: 20 },
-  { id: 'beer_pint',     name: 'Beer (pint)',      volume_ml: 568, abv_pct:  5.0, carbonated: false, duration_min: 30 },
+  { id: 'beer_pint',     name: 'Beer (large)',     volume_ml: 500, abv_pct:  5.0, carbonated: false, duration_min: 30 },
   { id: 'wine_glass',    name: 'Wine (glass)',     volume_ml: 150, abv_pct: 12.0, carbonated: false, duration_min: 15 },
   { id: 'wine_large',    name: 'Wine (large)',     volume_ml: 250, abv_pct: 12.0, carbonated: false, duration_min: 20 },
   { id: 'champagne',     name: 'Champagne',        volume_ml: 150, abv_pct: 12.0, carbonated: true,  duration_min: 10 },
