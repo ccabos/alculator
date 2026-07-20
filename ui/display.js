@@ -530,6 +530,24 @@ function _fmtAbv(v) {
 const FIELD_LABEL = { volume: 'Volume', abv: 'ABV', start: 'Start', end: 'End' };
 
 /**
+ * Convert a vertical slide distance (px) to a signed, up-positive step count.
+ *
+ * Steps are counted only *beyond* DRAG_THRESHOLD, giving a symmetric dead-zone
+ * around the origin: a small residual offset at release commits zero steps
+ * rather than nudging the value. Without this, recognising a drag at 8px but
+ * then dividing the raw distance meant a near-motionless release could still
+ * drift a field by one step (e.g. 200 mL → 195 mL).
+ *
+ * @param {number} dy — pointer travel; negative is up (increase).
+ * @returns {number}  — steps, positive for upward slides.
+ */
+function _slideSteps(dy) {
+  const mag = Math.abs(dy);
+  if (mag <= DRAG_THRESHOLD) return 0;
+  return -Math.sign(dy) * Math.round((mag - DRAG_THRESHOLD) / PX_PER_MIN);
+}
+
+/**
  * Compute the new value + display text for a field-button slide.
  *
  * @param {string} field  — 'volume' | 'abv' | 'start' | 'end'
@@ -632,7 +650,7 @@ function _bindFieldSlider(btn, field, { onLive, onCommit, onDoubleTap }) {
 
     e.preventDefault();
     if (Math.abs(dy) > DRAG_THRESHOLD) didDrag = true;
-    const units = -Math.round(dy / PX_PER_MIN);
+    const units = _slideSteps(dy);
     const { value, display } = _fieldValueFor(field, base, units);
     if (valueEl) valueEl.textContent = display;
     _showGestureOverlay(`${FIELD_LABEL[field]}  ${display}`);
@@ -646,7 +664,7 @@ function _bindFieldSlider(btn, field, { onLive, onCommit, onDoubleTap }) {
     const b = base;
     reset();
     if (wasReady && wasDrag && b) {
-      const units = -Math.round(finalDy / PX_PER_MIN);
+      const units = _slideSteps(finalDy);
       onCommit?.(field, _fieldValueFor(field, b, units).value);
     } else if (!wasReady && !wasScroll) {
       handleTap();
