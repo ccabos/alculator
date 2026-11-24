@@ -706,3 +706,31 @@ If the JavaScript implementation produces values outside the ±0.001 %
 tolerance, the most likely cause is an arithmetic difference in the
 simulation loop (e.g. floating-point rounding in the per-minute absorption
 increment).  The Python implementation should be treated as correct.
+
+---
+
+## 9. Deployment
+
+The app is a purely static site; no build step beyond copying files is needed.
+`scripts/build-site.sh` assembles the shipped files into `_site/` — add new
+top-level files or directories there (and to `PRECACHE_URLS` in `sw.js`).
+
+Pushing to `main` runs `.github/workflows/deploy.yml`, which tests and then
+deploys to two targets in parallel:
+
+| Target | How | Configuration |
+|---|---|---|
+| GitHub Pages | `actions/deploy-pages` | Repository → Settings → Pages → Source: GitHub Actions |
+| Cloudflare Workers (static assets) | `cloudflare/wrangler-action` | `wrangler.jsonc`, `_headers`; repository secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` |
+
+The Cloudflare job is skipped (with a notice) until both secrets are set.
+`_headers` forces revalidation of `sw.js`, `index.html` and `manifest.json` so
+that a bumped `CACHE_VERSION` reaches users promptly.
+
+Manual Cloudflare deploy from a local checkout:
+
+```bash
+scripts/build-site.sh
+npx wrangler@4 login      # once
+npx wrangler@4 deploy
+```

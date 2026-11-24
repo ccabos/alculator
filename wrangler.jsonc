@@ -1,0 +1,9 @@
+// Cloudflare Workers (static assets only — no server code).
+// Build the site first with `scripts/build-site.sh`, then `npx wrangler deploy`.
+{
+  "name": "alculator",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./_site"
+  }
+}
